@@ -13,7 +13,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "0.1.2";
+$VERSION = "0.2.2";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -48,6 +48,7 @@ sub event_privmsg {
 sub give_hats {
 	my $hats = 1;
 	$hats += int(rand(5));
+	my $bonus;
 
 	my $past_hats = 0;
 	if (exists $hats{$_[0]}{'hats'}){
@@ -59,9 +60,7 @@ sub give_hats {
 
 	if (exists $hats{$_[0]}{'last_time'}){
 		if (time - $hats{$_[0]}{'last_time'} < 86400){
-			my $no = 'thinks '.$_[0].' should be content with '.$hats{$_[0]}{'hats'}.' hat';
-			$no = pluralize($no);
-			
+			my $no = pluralize('thinks '.$_[0].' should be content with '.$hats{$_[0]}{'hats'}.' hat');
 			return $no;
 		}
 	} else {
@@ -71,12 +70,26 @@ sub give_hats {
 	$hats{$_[0]}{'last_time'} = time;
 	
 	my $new_hats = $hats + $past_hats;
+
+	if (int(rand(100)) > 90){
+		if (time % 2){
+			$new_hats = 1;
+			$bonus = 'burns down '.$_[0].'\'s house, destroying all the hats inside.';
+		} else {
+			$new_hats = $past_hats + 111;
+			$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
+		}
+	}
 	$hats{$_[0]}{'hats'} = $new_hats;
 
 	tied(%hats)->save;
 
-	my $out = 'gives '.$hats.' hats to '.$_[0].' for a total of '.$new_hats.' hat';
-	$out = pluralize($out);
+	my $out;
+	if ($bonus){
+		$out = $bonus;
+	} else {
+		$out = pluralize('gives '.$hats.' hats to '.$_[0].' for a total of '.$new_hats.' hat');
+	}
 	return ($out, $hats, $new_hats);
 }
 sub pluralize {
