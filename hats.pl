@@ -1,18 +1,12 @@
-# player can spend 10 banked hats to give a fedora to someone (fedoras are bad)
-# fedoras are permanent? random fedora theft incidents? bronies?
-
-
-#TODO: (in order of importance)
-#fedoras
+#TODO:
 #port database to SQL
 #find a nick that doesn't blow
-#uhh does perl have a problem with huge numbers?
 
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "0.3.0";
+$VERSION = "1.0.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -34,10 +28,12 @@ sub event_privmsg {
 	my @enabled_chans = split /,/, Irssi::settings_get_str('hat_channels');
 	return unless grep lc $target eq lc $_, (@enabled_chans);
 
-	if ($text =~ /^\s*\.hats?$/i){
+	if ($text =~ /^\s*\.hats?\b/i){
 		$return = (give_hats($nick))[0];
 	} elsif ($text =~ /^\s*\.fedora (\w+)/i){
 		$return = fedoras($nick, $1);
+	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
+		$return = (score($1))[0];
 	} else {
 		return;
 	}
@@ -115,7 +111,7 @@ sub fedoras {
 
 	tied(%hats)->save;
 
-	return 'awards '.$bottom.' 1 fedora.';
+	return 'takes '.$price.' of '.$top.'\'s hats and raises '.$bottom.'\'s enlightenment to '.(score($bottom))[-1];
 }
 sub reset_times {
 	for (keys %hats){
@@ -124,6 +120,29 @@ sub reset_times {
 		tied(%hats)->save;
 	}
 	print "hat timeouts (probably) reset";
+}
+sub score {
+	my ($good, $bad);
+	if (exists $hats{lc $_[0]}{'hats'}){
+		$good = $hats{lc $_[0]}{'hats'};
+	} else {
+		return ('does not pick on children.', 0);
+	}
+	if (exists $hats{lc $_[0]}{'fedoras'}){
+		$bad = $hats{lc $_[0]}{'fedoras'};
+	} else {
+		$bad = 0;
+	}
+	$bad *= 10;
+
+	my $score = 0;
+	if ($bad > 0){
+		$score = sprintf "%.03f", (10000 / ((($good + $bad) / $bad) * 200));
+		return ("estimates ".$_[0]."'s enlightenment to be ".$score.".", $score);
+	} else {
+		return ("refuses to stoop to your level.", 0);
+	}
+
 }
 sub pluralize {
 	my $string = $_[0];
