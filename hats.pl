@@ -6,14 +6,13 @@
 #fedoras
 #port database to SQL
 #find a nick that doesn't blow
-#rate limiting
 #uhh does perl have a problem with huge numbers?
 
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "0.2.3";
+$VERSION = "0.2.5";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -94,10 +93,17 @@ sub give_hats {
 	}
 	return ($out, $hats, $new_hats);
 }
+sub reset_times {
+	for (keys %hats){
+		$hats{$_}{'last_time'} = 8;
+
+		tied(%hats)->save;
+	}
+	print "hat timeouts (probably) reset";
+}
 sub pluralize {
 	my $string = $_[0];
-	my $num = $string;
-	$num =~ s/^.+(\d+).*?$/$1/;
+	my $num = ($string =~ /(\d+)/)[-1];
 
 	$num > 1 # why does this work...
 	? $string .= 's'
@@ -107,3 +113,4 @@ sub pluralize {
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
+Irssi::command_bind("hat_party", \&reset_times);
