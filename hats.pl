@@ -12,7 +12,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "0.2.6";
+$VERSION = "0.3.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -37,8 +37,7 @@ sub event_privmsg {
 	if ($text =~ /^\s*\.hats?$/i){
 		$return = (give_hats($nick))[0];
 	} elsif ($text =~ /^\s*\.fedora (\w+)/i){
-		# $return = fedoras($nick, $1);
-		return;
+		$return = fedoras($nick, $1);
 	} else {
 		return;
 	}
@@ -98,11 +97,25 @@ sub give_hats {
 sub fedoras {
 	my ($top, $bottom) = @_;
 
-	if ($bottom){
+	if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
 		return "does not think $bottom is a person.";
 	} elsif (! $bottom) {
 		return "needs a target.";
 	}
+
+	my $price;
+	if ($hats{lc $top}{'hats'} < 10){
+		return "demands at least ten hats for this service.";
+	}
+	$price = int($hats{lc $top}{'hats'} / 10);
+	$price = 10 if $price < 10;
+
+	$hats{lc $top}{'hats'} -= $price;
+	$hats{lc $bottom}{'fedoras'} += 1;
+
+	tied(%hats)->save;
+
+	return 'awards '.$bottom.' 1 fedora.';
 }
 sub reset_times {
 	for (keys %hats){
@@ -117,8 +130,8 @@ sub pluralize {
 	my $num = ($string =~ /(\d+)/)[-1];
 
 	$num > 1 # why does this work...
-	? $string .= 's'
-	: $string .= '.';
+		? $string .= 's'
+		: $string .= '.';
 
 	return $string;
 }
