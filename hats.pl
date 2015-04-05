@@ -6,7 +6,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "1.0.0";
+$VERSION = "1.0.1";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -15,7 +15,8 @@ $VERSION = "1.0.0";
     license => 'MIT/X11'
 );
 Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
-
+Irssi::settings_add_str('hatbot', 'hat_lords', "");
+Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
@@ -26,10 +27,20 @@ sub event_privmsg {
 	my $return;
 
 	my @enabled_chans = split /,/, Irssi::settings_get_str('hat_channels');
+	my $hat_lords = Irssi::settings_get_str('hat_lords');
+
 	return unless grep lc $target eq lc $_, (@enabled_chans);
 
 	if ($text =~ /^\s*\.hats?\b/i){
-		$return = (give_hats($nick))[0];
+		if ($text =~ /party/){
+			my $pretender = (split /\@/, $mask)[-1];
+			if ($hat_lords =~ /$pretender/i){
+				reset_times();
+				$return = 'obeys.';
+			}
+		} else {
+			$return = (give_hats($nick))[0];
+		}
 	} elsif ($text =~ /^\s*\.fedora (\w+)/i){
 		$return = fedoras($nick, $1);
 	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
@@ -53,9 +64,10 @@ sub give_hats {
 		$hats{$them}{'hats'} = 0;
 	}
 
+	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
 
 	if (exists $hats{$them}{'last_time'}){
-		if (time - $hats{$them}{'last_time'} < 86400){
+		if (time - $hats{$them}{'last_time'} < $hat_timeout){
 			my $no = pluralize('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hat');
 			return $no;
 		}
