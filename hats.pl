@@ -13,7 +13,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "0.2.2";
+$VERSION = "0.2.3";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -88,7 +88,9 @@ sub give_hats {
 	if ($bonus){
 		$out = $bonus;
 	} else {
-		$out = pluralize('gives '.$hats.' hats to '.$_[0].' for a total of '.$new_hats.' hat');
+		$out = pluralize('gives '.$hats.' hat');
+		$out =~ s/\.$//; #already misusing my own functions. cool.
+		$out .= pluralize(' to '.$_[0].' for a total of '.$new_hats.' hat');
 	}
 	return ($out, $hats, $new_hats);
 }
