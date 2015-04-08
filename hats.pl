@@ -1,12 +1,30 @@
 #TODO:
 #port database to SQL
 #find a nick that doesn't blow
+#
+#all hats spent on fedoras go into community bank. every 24hr, bank is either:
+##given to someone 
+##spent entirely on fedoras for the person who gave the most
+
+# <sugoidesune> I really need to figure out some sort of endgame for the hat economy
+# <@BoarderX> hatpocalypse?
+# <General_Vagueness> The Hatpenning
+# <sugoidesune> think I'll leave .hat as is but remove the constant arson
+# <sugoidesune> and do something to make gambling an actual system
+# <sugoidesune> wanna go all in on hats
+# <sugoidesune> double or nothing
+# <sugoidesune> also need a way to convince #moap that fedoras are a bad thing
+
+# <@sugoidesune> oh man I could tie the odds on the hat gambling to a person's enlightenment score
+
+# <sugoidesune> if I'm tying odds to fedoras I guess I should do the random bronies thing after all
+
 
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "1.1.1";
+$VERSION = "2.1.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -31,6 +49,7 @@ sub event_privmsg {
 
 	return unless grep lc $target eq lc $_, (@enabled_chans);
 
+	#how many hoops would I need to jump through to get switch statements back
 	if ($text =~ /^\s*\.hats?\b/i){
 		if ($text =~ /party/){
 			my $pretender = (split /\@/, $mask)[-1];
@@ -45,6 +64,11 @@ sub event_privmsg {
 		$return = fedoras($nick, $1);
 	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
 		$return = (score($1))[0];
+
+	} elsif ($text =~ /^\s*\.bank/i){
+		$return = (bank())[0];
+	} elsif ($text =~ s/^\s*\.bet//i){
+		$return = gamble($text, $nick);
 	} else {
 		return;
 	}
@@ -79,14 +103,9 @@ sub give_hats {
 	
 	my $new_hats = $hats + $past_hats;
 
-	if (int(rand(100)) > 90){
-		if (time % 2){
-			$new_hats = 1;
-			$bonus = 'burns down '.$_[0].'\'s house, destroying all '.($hats{$them}{'hats'} - 1).' hats inside.';
-		} else {
-			$new_hats = $past_hats + 111;
-			$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
-		}
+	if (int(rand(100)) > 95){
+		$new_hats = $past_hats + 111;
+		$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
 	}
 	$hats{$them}{'hats'} = $new_hats;
 
@@ -120,6 +139,8 @@ sub fedoras {
 
 	$hats{lc $top}{'hats'} -= $price;
 	$hats{lc $bottom}{'fedoras'} += 1;
+
+	$hats{'BANK'}{'hats'} += $price;
 
 	tied(%hats)->save;
 
@@ -163,8 +184,82 @@ sub pluralize {
 	$num != 1 # why does this work...
 		? $string .= 's'
 		: $string .= '.';
+	# if ($num == 0 || $num > 1){
+	# 	$string .= 's';
+	# }
+	# $string .= '.';
 
 	return $string;
+}
+sub bank {
+	if (! exists $hats{'BANK'}{'hats'}){
+		$hats{'BANK'}{'hats'} = 0;
+		tied(%hats)->save;
+	}
+	return (pluralize("currently holds ".$hats{'BANK'}{'hats'}." hat"), $hats{"BANK"}{'hats'});
+}
+sub gamble {
+	my ($text, $nick) = @_;
+
+	my $custom = 0;
+
+	my $bet = $hats{lc $nick}{'hats'};
+	if ($text =~ /(\d+)/){ #default bet is everything but you can be a babby if you want
+		if ($1 < $bet){
+			$bet = $1;
+		} elsif ($1 > $bet){ # don't try to bet more than you have
+			return "is not stupid. You only have $bet hats.";
+		}
+		$custom++;
+	}
+
+	my $max_bet = $hats{'BANK'}{'hats'};
+	if ($bet > $max_bet){
+		if ($max_bet == 0){
+			return "is broke.";
+		} elsif ($custom){
+			return "can only match up to ".$max_bet.".";
+		} else {
+			$bet = $max_bet;
+		}
+	} elsif ($bet == 0){
+		return "will not give you something for nothing.";
+	}
+
+	# adjust odds based on person's fedoras
+	my $odds = 100;
+	my $win; 
+	if (exists $hats{lc $nick}{'fedoras'}){
+		$odds -= $hats{lc $nick}{'fedoras'};
+	}
+	$win = int rand $odds;
+	if ($win >= 50){
+		$win = 1;
+	} else {
+		$win = 0;
+	}
+
+	my $return;
+	if ($win){ #they win
+		$hats{lc $nick}{'hats'} += $bet;
+		$hats{'BANK'}{'hats'} -= $bet;
+
+		tied(%hats)->save;
+
+		$return = pluralize('transfers '.$bet.' hat');
+		$return =~ s/\.$//;
+		$return .= pluralize(' to '.$nick.'. Hatbot retains '.$hats{'BANK'}{'hats'}.' hat');
+	} else { #house wins
+		$hats{lc $nick}{'hats'} -= $bet;
+		$hats{'BANK'}{'hats'} += $bet;
+
+		tied(%hats)->save;
+
+		$return = pluralize('takes '.$bet.' hat');
+		$return =~ s/\.$//;
+		$return .= pluralize(' from '.$nick.'. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hat');
+	}
+	return $return;
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
