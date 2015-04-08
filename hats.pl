@@ -6,7 +6,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "1.0.1";
+$VERSION = "1.1.1";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -82,7 +82,7 @@ sub give_hats {
 	if (int(rand(100)) > 90){
 		if (time % 2){
 			$new_hats = 1;
-			$bonus = 'burns down '.$_[0].'\'s house, destroying all the hats inside.';
+			$bonus = 'burns down '.$_[0].'\'s house, destroying all '.($hats{$them}{'hats'} - 1).' hats inside.';
 		} else {
 			$new_hats = $past_hats + 111;
 			$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
@@ -160,7 +160,7 @@ sub pluralize {
 	my $string = $_[0];
 	my $num = ($string =~ /(\d+)/)[-1];
 
-	$num > 1 # why does this work...
+	$num != 1 # why does this work...
 		? $string .= 's'
 		: $string .= '.';
 
