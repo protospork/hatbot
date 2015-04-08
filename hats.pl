@@ -2,20 +2,6 @@
 #port database to SQL
 #find a nick that doesn't blow
 #
-#all hats spent on fedoras go into community bank. every 24hr, bank is either:
-##given to someone 
-##spent entirely on fedoras for the person who gave the most
-
-# <sugoidesune> I really need to figure out some sort of endgame for the hat economy
-# <@BoarderX> hatpocalypse?
-# <General_Vagueness> The Hatpenning
-# <sugoidesune> think I'll leave .hat as is but remove the constant arson
-# <sugoidesune> and do something to make gambling an actual system
-# <sugoidesune> wanna go all in on hats
-# <sugoidesune> double or nothing
-# <sugoidesune> also need a way to convince #moap that fedoras are a bad thing
-
-# <@sugoidesune> oh man I could tie the odds on the hat gambling to a person's enlightenment score
 
 # <sugoidesune> if I'm tying odds to fedoras I guess I should do the random bronies thing after all
 
@@ -24,7 +10,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.1.5";
+$VERSION = "2.1.6";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -35,6 +21,7 @@ $VERSION = "2.1.5";
 Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
+Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
@@ -129,13 +116,10 @@ sub fedoras {
 		return "needs a target.";
 	}
 
-	my $price;
-	if ($hats{lc $top}{'hats'} < 10){
-		return "demands at least ten hats for this service.";
+	my $price = Irssi::settings_get_int('hat_fedora_price');
+	if ($hats{lc $top}{'hats'} < $price){
+		return "demands at least $price hats for this service.";
 	}
-	$price = int($hats{lc $top}{'hats'} / 10);
-	$price = 10 if $price < 10;
-
 	$hats{lc $top}{'hats'} -= $price;
 	$hats{lc $bottom}{'fedoras'} += 1;
 
