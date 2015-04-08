@@ -24,7 +24,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.1.4";
+$VERSION = "2.1.5";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -73,6 +73,7 @@ sub event_privmsg {
 		return;
 	}
 
+	$return = pluralize($return);
 	$server->command("action $target $return");
 }
 sub give_hats {
@@ -92,7 +93,7 @@ sub give_hats {
 
 	if (exists $hats{$them}{'last_time'}){
 		if (time - $hats{$them}{'last_time'} < $hat_timeout){
-			my $no = pluralize('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hat');
+			my $no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
 			return $no;
 		}
 	} else {
@@ -115,9 +116,7 @@ sub give_hats {
 	if ($bonus){
 		$out = $bonus;
 	} else {
-		$out = pluralize('gives '.$hats.' hat');
-		$out =~ s/\.$//; #already misusing my own functions. cool.
-		$out .= pluralize(' to '.$_[0].' for a total of '.$new_hats.' hat');
+		$out = 'gives '.$hats.' hats to '.$_[0].' for a total of '.$new_hats.' hats.';
 	}
 	return ($out, $hats, $new_hats);
 }
@@ -177,17 +176,9 @@ sub score {
 	}
 
 }
-sub pluralize {
+sub pluralize { #always refer to "hats", never "hat"
 	my $string = $_[0];
-	my $num = ($string =~ /(\d+)/)[-1];
-
-	$num != 1 # why does this work...
-		? $string .= 's'
-		: $string .= '.';
-	# if ($num == 0 || $num > 1){
-	# 	$string .= 's';
-	# }
-	# $string .= '.';
+	$string =~ s/\b1 ([Hh])ats/1 $1at/gi;
 
 	return $string;
 }
@@ -196,7 +187,7 @@ sub bank {
 		$hats{'BANK'}{'hats'} = 0;
 		tied(%hats)->save;
 	}
-	return (pluralize("currently holds ".$hats{'BANK'}{'hats'}." hat"), $hats{"BANK"}{'hats'});
+	return ("currently holds ".$hats{'BANK'}{'hats'}." hats.", $hats{"BANK"}{'hats'});
 }
 sub gamble {
 	my ($text, $nick) = @_;
@@ -246,18 +237,14 @@ sub gamble {
 
 		tied(%hats)->save;
 
-		$return = pluralize('transfers '.$bet.' hat');
-		$return =~ s/\.$//;
-		$return .= pluralize(' to '.$nick.'. Hatbot retains '.$hats{'BANK'}{'hats'}.' hat');
+		$return = 'transfers '.$bet.' hats to '.$nick.'. Hatbot retains '.$hats{'BANK'}{'hats'}.' hats.';
 	} else { #house wins
 		$hats{lc $nick}{'hats'} -= $bet;
 		$hats{'BANK'}{'hats'} += $bet;
 
 		tied(%hats)->save;
 
-		$return = pluralize('takes '.$bet.' hat');
-		$return =~ s/\.$//;
-		$return .= pluralize(' from '.$nick.'. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hat');
+		$return = 'takes '.$bet.' hats from '.$nick.'. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
 	}
 	return $return;
 }
