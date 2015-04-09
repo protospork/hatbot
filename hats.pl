@@ -5,12 +5,11 @@
 
 # <sugoidesune> if I'm tying odds to fedoras I guess I should do the random bronies thing after all
 
-
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.1.6";
+$VERSION = "2.2.2";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -65,8 +64,9 @@ sub event_privmsg {
 }
 sub give_hats {
 	my $them = lc $_[0];
-	my $hats = 1;
+	my $hats = 6;
 	$hats += int(rand(5));
+
 	my $bonus;
 
 	my $past_hats = 0;
@@ -80,6 +80,32 @@ sub give_hats {
 
 	if (exists $hats{$them}{'last_time'}){
 		if (time - $hats{$them}{'last_time'} < $hat_timeout){
+
+			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
+			# <BoarderX> lol welfare hats
+			if ($hats{'BANK'}{'hats'} > 1000 && $hats{$them}{'hats'} < 10){
+				#initialize some stuff just to be safe
+				if (! exists $hats{$them}{'last_handout'}){
+					$hats{$them}{'last_handout'} = 0;
+				}
+				if (! exists $hats{$them}{'fedoras'}){
+					$hats{$them}{'fedoras'} = 0;
+				}
+
+				# make fedoras affect the payout
+				my $gift = 50 - $hats{$them}{'fedoras'};
+				# only one welfare payout per 24h
+				if (time - $hats{$them}{'last_handout'} > 86400 && $gift > 0){
+					$hats{$them}{'last_handout'} = time;
+
+					$hats{$them}{'hats'} += $gift;
+					$hats{'BANK'}{'hats'} -= $gift;
+					tied(%hats)->save;
+
+					my $out = pluralize('is giving you '.$gift.' hats from his personal fund, '.$_[0].'. Please try to get your life back on track.');
+					return $out;
+				}
+			}
 			my $no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
 			return $no;
 		}
@@ -95,6 +121,7 @@ sub give_hats {
 		$new_hats = $past_hats + 111;
 		$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
 	}
+
 	$hats{$them}{'hats'} = $new_hats;
 
 	tied(%hats)->save;
