@@ -2,7 +2,7 @@
 ####.hat
 gives you hats
 ####.fedora [person]
-spend 10% (minimum 10) of your hats to ruin someone's day
+spend [probably 50] hats to ruin someone's odds
 ####.enlightenment [person]
 ┐(°‿ ° )┌
 ####.bet [number]
