@@ -9,7 +9,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.2.2";
+$VERSION = "2.2.3";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -102,7 +102,7 @@ sub give_hats {
 					$hats{'BANK'}{'hats'} -= $gift;
 					tied(%hats)->save;
 
-					my $out = pluralize('is giving you '.$gift.' hats from his personal fund, '.$_[0].'. Please try to get your life back on track.');
+					my $out = 'is giving you '.$gift.' hats from his personal fund, '.$_[0].'. Please try to get your life back on track.';
 					return $out;
 				}
 			}
@@ -248,14 +248,14 @@ sub gamble {
 
 		tied(%hats)->save;
 
-		$return = 'transfers '.$bet.' hats to '.$nick.'. Hatbot retains '.$hats{'BANK'}{'hats'}.' hats.';
+		$return = 'raises '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot retains '.$hats{'BANK'}{'hats'}.' hats.';
 	} else { #house wins
 		$hats{lc $nick}{'hats'} -= $bet;
 		$hats{'BANK'}{'hats'} += $bet;
 
 		tied(%hats)->save;
 
-		$return = 'takes '.$bet.' hats from '.$nick.'. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
+		$return = 'lowers '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
 	}
 	return $return;
 }
