@@ -2,14 +2,31 @@
 #port database to SQL
 #find a nick that doesn't blow
 #
+# move all the hash key initialization stuff to one place; also figure out where that place would be
 
 # <sugoidesune> if I'm tying odds to fedoras I guess I should do the random bronies thing after all
+# also prob tie welfare to fedora price
+# also prob raise fedora price depending on your fedoras
+
+# change hat drops from random to hours_gone * 5 maxed at 50 or something
+# so hat party rules would give us all 50, I guess. that's fine
+
+# if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
+
+#GIFTING:
+#-don't allow new nicks to gift hats (but it should be fine for them to receive hats?)
+#-they can only send one gift per 24h?
+#-they can't send gifts within 24 of getting charity?
+
+#HATSTATS:
+#dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
+#maybe don't do this until SQL happens?
 
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.2.3";
+$VERSION = "2.2.6";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -21,6 +38,7 @@ Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
+Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
@@ -34,6 +52,11 @@ sub event_privmsg {
 	my $hat_lords = Irssi::settings_get_str('hat_lords');
 
 	return unless grep lc $target eq lc $_, (@enabled_chans);
+
+	#antiflood thing
+	if (! exists $hats{lc $nick}{'last_trigger'}){
+		$hats{lc $nick}{'last_trigger'} = time - 10;
+	}
 
 	#how many hoops would I need to jump through to get switch statements back
 	if ($text =~ /^\s*\.hats?\b/i){
@@ -59,8 +82,13 @@ sub event_privmsg {
 		return;
 	}
 
+	#if it got this far it probably is a trigger
+	$hats{lc $nick}{'last_trigger'} = time;
+
 	$return = pluralize($return);
-	$server->command("action $target $return");
+	if ($return && $return ne 'STOP'){
+		$server->command("action $target $return");
+	}
 }
 sub give_hats {
 	my $them = lc $_[0];
@@ -74,6 +102,11 @@ sub give_hats {
 		$past_hats = $hats{$them}{'hats'};
 	} else {
 		$hats{$them}{'hats'} = 0;
+	}
+
+	#initialize the anti-flood thing here for some reason
+	if (! exists $hats{$them}{'flood'}){
+		$hats{$them}{'flood'} = 0;
 	}
 
 	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
@@ -107,6 +140,10 @@ sub give_hats {
 				}
 			}
 			my $no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
+			$hats{$them}{'flood'}++;
+			if ($hats{$them}{'flood'} > 1 && time - $hats{$them}{'last_trigger'} < 2){
+				return 'STOP';
+			}
 			return $no;
 		}
 	} else {
@@ -114,6 +151,7 @@ sub give_hats {
 	}
 
 	$hats{$them}{'last_time'} = time;
+	$hats{$them}{'flood'} = 0;
 	
 	my $new_hats = $hats + $past_hats;
 
@@ -205,6 +243,22 @@ sub gamble {
 
 	my $custom = 0;
 
+	if (! exists $hats{lc $nick}{'last_bet'}){
+		$hats{lc $nick}{'last_bet'} = time - 600;
+	} elsif (! exists $hats{lc $nick}{'hats'}){ # it is possible for a noob to randomly try gambling
+		$hats{lc $nick}{'hats'} = 0;
+	}
+
+	#anti-flood
+	my $bet_timeout = Irssi::settings_get_int('hat_bet_timeout');
+	if (time - $hats{lc $nick}{'last_bet'} < $bet_timeout){
+		if (time - $hats{lc $nick}{'last_trigger'} < 2){
+			return 'STOP';
+		}
+		return "advises you to slow down and consider your actions.";
+	}
+
+	$hats{lc $nick}{'last_bet'} = time;
 	my $bet = $hats{lc $nick}{'hats'};
 	if ($text =~ /(\d+)/){ #default bet is everything but you can be a babby if you want
 		if ($1 < $bet){
