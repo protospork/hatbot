@@ -14,9 +14,25 @@
 # if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
 
 #GIFTING:
+#-format should be gift $amount $nick so it's harder to trick spaghettio
 #-don't allow new nicks to gift hats (but it should be fine for them to receive hats?)
 #-they can only send one gift per 24h?
 #-they can't send gifts within 24 of getting charity?
+
+
+#LOTTERY:
+# <@sugoidesune> you thinking like... betting within the last 24 hours puts you in the running?
+# <@icefire> be lower than some threshold of hats and bet yeah
+# <~KDE_Perry> can we inject more randomness
+# <@sugoidesune> maybe make the pot 10% or something of every .bet transaction that day
+# <@icefire> oooooooo
+# <~KDE_Perry> i feel like this might be satisfying
+# <@sugoidesune> magically created hats, not out of anyone's pocket
+# <@Tar> fancy
+# <@icefire> that sounds fun
+# <@icefire> would also mean my massive bets would drive it up really quickly
+# <@icefire> until I go broke
+# <@sugoidesune> I'm not married to 10%
 
 #HATSTATS:
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
@@ -26,7 +42,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.2.6";
+$VERSION = "2.3.1";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -260,13 +276,20 @@ sub gamble {
 
 	$hats{lc $nick}{'last_bet'} = time;
 	my $bet = $hats{lc $nick}{'hats'};
-	if ($text =~ /(\d+)/){ #default bet is everything but you can be a babby if you want
+	if ($text =~ /\b(\d+)/){ #default bet is everything but you can be a babby if you want
 		if ($1 < $bet){
 			$bet = $1;
 		} elsif ($1 > $bet){ # don't try to bet more than you have
 			return "is not stupid. You only have $bet hats.";
 		}
 		$custom++;
+	} elsif ($text =~ /half/i){
+		$bet = int($hats{lc $nick}{'hats'} / 2);
+		$custom++;
+	} elsif ($text =~ /mod(\d\d*)/i){
+		$bet = int($hats{lc $nick}{'hats'} % $1);
+		$custom++;
+		return "cannot read this shit." if $bet == 0;
 	}
 
 	my $max_bet = $hats{'BANK'}{'hats'};
