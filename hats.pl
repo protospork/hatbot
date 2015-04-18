@@ -2,10 +2,7 @@
 #port database to SQL
 #find a nick that doesn't blow
 #
-# move all the hash key initialization stuff to one place; also figure out where that place would be
 
-# <sugoidesune> if I'm tying odds to fedoras I guess I should do the random bronies thing after all
-# also prob tie welfare to fedora price
 # also prob raise fedora price depending on your fedoras
 
 # change hat drops from random to hours_gone * 5 maxed at 50 or something
@@ -42,7 +39,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.3.1";
+$VERSION = "2.3.3";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -85,8 +82,8 @@ sub event_privmsg {
 		} else {
 			$return = (give_hats($nick))[0];
 		}
-	} elsif ($text =~ /^\s*\.fedora (\w+)/i){
-		$return = fedoras($nick, $1);
+	} elsif ($text =~ /^\s*\.fedora/i){
+		$return = fedoras($nick, $text);
 	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
 		$return = (score($1))[0];
 
@@ -191,24 +188,55 @@ sub give_hats {
 sub fedoras {
 	my ($top, $bottom) = @_;
 
-	if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
-		return "does not think $bottom is a person.";
-	} elsif (! $bottom) {
-		return "needs a target.";
-	}
+	$bottom =~ s/^.+?dora\s+//i;
+	if ($bottom =~ /buyout/i){
+		my $charge = fedora_buyout_price($top);
 
+		if ($hats{lc $top}{'hats'} < $charge){
+			return "knows you don't have $charge hats.";
+		} elsif ($hats{lc $top}{'fedoras'} == 0){
+			return "cannot solve your problems.";
+		}
+
+		$hats{lc $top}{'hats'} -= $charge;
+		$hats{lc $top}{'fedoras'} -= 1;
+		$hats{'BANK'}{'hats'} += $charge;
+
+		tied(%hats)->save;
+
+		my $out = 'misplaces a fedora while accepting '.$top.'\'s gift of '.$charge.' hats. ';
+		if ($hats{lc $top}{'fedoras'} > 0){
+			$out .= $top.' will have to make do with '.$hats{lc $top}{'fedoras'}.' fedoras.';
+		} else {
+			$out .= $top.' is out of fedoras. Hatbot apologizes.';
+		}
+		return $out;
+	} else {
+		if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
+			return "does not think $bottom is a person.";
+		} elsif (! $bottom || $bottom eq '') {
+			return "needs a target.";
+		}
+
+		my $price = Irssi::settings_get_int('hat_fedora_price');
+		if ($hats{lc $top}{'hats'} < $price){
+			return "demands at least $price hats for this service.";
+		}
+		$hats{lc $top}{'hats'} -= $price;
+		$hats{lc $bottom}{'fedoras'} += 1;
+
+		$hats{'BANK'}{'hats'} += $price;
+
+		tied(%hats)->save;
+
+		return 'takes '.$price.' of '.$top.'\'s hats and raises '.$bottom.'\'s enlightenment to '.(score($bottom))[-1];
+	}
+}
+sub fedora_buyout_price {
+	my $person = $_[0];
 	my $price = Irssi::settings_get_int('hat_fedora_price');
-	if ($hats{lc $top}{'hats'} < $price){
-		return "demands at least $price hats for this service.";
-	}
-	$hats{lc $top}{'hats'} -= $price;
-	$hats{lc $bottom}{'fedoras'} += 1;
-
-	$hats{'BANK'}{'hats'} += $price;
-
-	tied(%hats)->save;
-
-	return 'takes '.$price.' of '.$top.'\'s hats and raises '.$bottom.'\'s enlightenment to '.(score($bottom))[-1];
+	$price += ($price - (score($person))[1]);
+	return int($price);
 }
 sub reset_times {
 	for (keys %hats){
@@ -289,7 +317,8 @@ sub gamble {
 	} elsif ($text =~ /mod(\d\d*)/i){
 		$bet = int($hats{lc $nick}{'hats'} % $1);
 		$custom++;
-		return "cannot read this shit." if $bet == 0;
+		return "cannot read this shit." if !$1;
+		$bet = $1 if $bet == 0;
 	}
 
 	my $max_bet = $hats{'BANK'}{'hats'};
