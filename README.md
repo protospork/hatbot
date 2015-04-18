@@ -3,6 +3,8 @@
 gives you hats
 ####.fedora [person]
 spend [probably 50] hats to ruin someone's odds
+###.fedora buyout
+pay hatbot to dispose of one of your fedoras
 ####.enlightenment [person]
 ┐(°‿ ° )┌
 ####.bet [number]
