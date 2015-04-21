@@ -39,7 +39,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.3.3";
+$VERSION = "2.3.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -86,7 +86,8 @@ sub event_privmsg {
 		$return = fedoras($nick, $text);
 	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
 		$return = (score($1))[0];
-
+	} elsif ($text =~ /^\s*\.enl/i){ #elegant.
+		$return = (scores($nick))[0];
 	} elsif ($text =~ /^\s*\.bank/i){
 		$return = (bank())[0];
 	} elsif ($text =~ s/^\s*\.bet//i){
@@ -188,7 +189,7 @@ sub give_hats {
 sub fedoras {
 	my ($top, $bottom) = @_;
 
-	$bottom =~ s/^.+?dora\s+//i;
+	$bottom =~ s/^.+?dora\s*//i;
 	if ($bottom =~ /buyout/i){
 		my $charge = fedora_buyout_price($top);
 
@@ -212,6 +213,7 @@ sub fedoras {
 		}
 		return $out;
 	} else {
+		$bottom =~ s/(\w+)\s+.+$/$1/; #might as well keep the markovs in this I guess
 		if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
 			return "does not think $bottom is a person.";
 		} elsif (! $bottom || $bottom eq '') {
@@ -241,9 +243,8 @@ sub fedora_buyout_price {
 sub reset_times {
 	for (keys %hats){
 		$hats{$_}{'last_time'} = 8;
-
-		tied(%hats)->save;
 	}
+	tied(%hats)->save;
 	print "hat timeouts (probably) reset";
 }
 sub score {
