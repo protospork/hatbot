@@ -87,7 +87,7 @@ sub event_privmsg {
 	} elsif ($text =~ /^\s*\.enl(?:ighten(?:ment)?)? (\w+)/i){
 		$return = (score($1))[0];
 	} elsif ($text =~ /^\s*\.enl/i){ #elegant.
-		$return = (scores($nick))[0];
+		$return = (score($nick))[0];
 	} elsif ($text =~ /^\s*\.bank/i){
 		$return = (bank())[0];
 	} elsif ($text =~ s/^\s*\.bet//i){
