@@ -39,7 +39,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.3.4";
+$VERSION = "2.4.1";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -55,6 +55,9 @@ Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
+if (! $hats{'BANK'}{'lotto_day'}){
+	$hats{'BANK'}{'lotto_day'} = (gmtime)[3];
+}
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
@@ -92,12 +95,22 @@ sub event_privmsg {
 		$return = (bank())[0];
 	} elsif ($text =~ s/^\s*\.bet//i){
 		$return = gamble($text, $nick);
+	} elsif ((gmtime)[3] != $hats{'BANK'}{'lotto_day'}){
+		($return, $target) = lottery($target);
+	} elsif ($text =~ /^\s*\.lotto/i){ # manually trigger lotteries for testing
+		my $pretender = (split /\@/, $mask)[-1];
+		if ($hat_lords =~ /$pretender/i){
+			($return, $target) = lottery($target);
+		} else {
+			return;
+		}
 	} else {
 		return;
 	}
 
 	#if it got this far it probably is a trigger
 	$hats{lc $nick}{'last_trigger'} = time;
+	$hats{lc $nick}{'last_chan'} = $target;
 
 	$return = pluralize($return);
 	if ($return && $return ne 'STOP'){
@@ -200,6 +213,7 @@ sub fedoras {
 		}
 
 		$hats{lc $top}{'hats'} -= $charge;
+		$hats{lc $top}{'tx_ttl'} += $charge;
 		$hats{lc $top}{'fedoras'} -= 1;
 		$hats{'BANK'}{'hats'} += $charge;
 
@@ -225,7 +239,9 @@ sub fedoras {
 			return "demands at least $price hats for this service.";
 		}
 		$hats{lc $top}{'hats'} -= $price;
+		$hats{lc $top}{'tx_ttl'} += $price;
 		$hats{lc $bottom}{'fedoras'} += 1;
+		$hats{lc $bottom}{'tx_ttl'} += $price;
 
 		$hats{'BANK'}{'hats'} += $price;
 
@@ -351,6 +367,7 @@ sub gamble {
 	my $return;
 	if ($win){ #they win
 		$hats{lc $nick}{'hats'} += $bet;
+		$hats{lc $nick}{'tx_ttl'} += $bet;
 		$hats{'BANK'}{'hats'} -= $bet;
 
 		tied(%hats)->save;
@@ -358,6 +375,7 @@ sub gamble {
 		$return = 'raises '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot retains '.$hats{'BANK'}{'hats'}.' hats.';
 	} else { #house wins
 		$hats{lc $nick}{'hats'} -= $bet;
+		$hats{lc $nick}{'tx_ttl'} += $bet;
 		$hats{'BANK'}{'hats'} += $bet;
 
 		tied(%hats)->save;
@@ -365,6 +383,45 @@ sub gamble {
 		$return = 'lowers '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
 	}
 	return $return;
+}
+sub lottery {
+	my @contestants;
+	my $pot;
+
+	$hats{'BANK'}{'lotto_day'} = (gmtime)[3];
+
+	for my $p (keys %hats){
+		if (! $hats{$p}{'tx_ttl'}){ #initialize
+			$hats{$p}{'tx_ttl'} = 0;
+		}
+
+		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions today
+			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most of) the day's transactions
+			$hats{$p}{'tx_ttl'} = 0; #zero it for tomorrow
+
+			if ($p ne 'BANK'){
+				push @contestants, $p;
+			}
+		}
+	}
+	$pot = int $pot;
+
+	#now pick a winner
+	#bug(?): all nicks are lowercased because they're just the hash keys
+	my $w = $contestants[int rand @contestants];
+
+	$hats{$w}{'hats'} += $pot;
+	
+	tied(%hats)->save;
+
+	my $there;
+	if (! $hats{$w}{'last_chan'}){
+		$there = $_[0];
+	} else {
+		$there = $hats{$w}{'last_chan'};
+	}
+
+	return ("writes a giant foam check for $pot hats and gives it to $w", $there);
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
