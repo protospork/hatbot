@@ -39,7 +39,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.1";
+$VERSION = "2.4.2";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -227,7 +227,7 @@ sub fedoras {
 		}
 		return $out;
 	} else {
-		$bottom =~ s/(\w+)\s+.+$/$1/; #might as well keep the markovs in this I guess
+		$bottom = (split /\s+/, $bottom)[0]; #might as well keep the markovs in this I guess
 		if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
 			return "does not think $bottom is a person.";
 		} elsif (! $bottom || $bottom eq '') {
@@ -384,6 +384,13 @@ sub gamble {
 	}
 	return $return;
 }
+
+#2.4.1
+# <@sugoidesune> .lotto
+# * hatbot writes a giant foam check for 187 hats and gives it to hal9001
+# <@sugoidesune> well that ...wait
+# <@sugoidesune> .lotto
+# * hatbot writes a giant foam check for 0 hats and gives it to
 sub lottery {
 	my @contestants;
 	my $pot;
@@ -395,6 +402,7 @@ sub lottery {
 			$hats{$p}{'tx_ttl'} = 0;
 		}
 
+#this isn't a real lottery or raffle, for any number of reasons
 		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions today
 			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most of) the day's transactions
 			$hats{$p}{'tx_ttl'} = 0; #zero it for tomorrow
