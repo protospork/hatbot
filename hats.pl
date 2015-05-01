@@ -1,7 +1,5 @@
 #TODO:
 #port database to SQL
-#find a nick that doesn't blow
-#
 
 # also prob raise fedora price depending on your fedoras
 
@@ -10,26 +8,24 @@
 
 # if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
 
+# <@BEES> I feel like I should set up some sort of global odds boost centered around fedoraing hatbot, but also I have no idea how that would work
+# <@Tar> for betting
+# <@Tar> fedoras affect people the current way
+# <@Tar> but hatbot also has odds that are affected by fedoras on a smaller scale
+# <%Lucifer7> 1 fedora on hatbot equals a .25% boost to everyone's chances
+# <@Tar> higher roll wins
+# <@Tar> oh and fedoras clear out fairly frequent (but potentially randomly so it's not gameable?)
+# <@BEES> hatbot's would have to roll off either on a timer or whenever he wins a bet, since doesn't have free will like bawk
+# <+bawk> hatbot's too poor or duct-taping-things-to-shotguns poor
+# <@Tar> it'd be when people bet against him
+# <Jason> how about whoever has a number of fedoras closer to the modulo of hatbot's total fedoras?
+# <@Tar> like ".bet 10" roll 2 die and higher wins
+
 #GIFTING:
 #-format should be gift $amount $nick so it's harder to trick spaghettio
 #-don't allow new nicks to gift hats (but it should be fine for them to receive hats?)
 #-they can only send one gift per 24h?
 #-they can't send gifts within 24 of getting charity?
-
-
-#LOTTERY:
-# <@sugoidesune> you thinking like... betting within the last 24 hours puts you in the running?
-# <@icefire> be lower than some threshold of hats and bet yeah
-# <~KDE_Perry> can we inject more randomness
-# <@sugoidesune> maybe make the pot 10% or something of every .bet transaction that day
-# <@icefire> oooooooo
-# <~KDE_Perry> i feel like this might be satisfying
-# <@sugoidesune> magically created hats, not out of anyone's pocket
-# <@Tar> fancy
-# <@icefire> that sounds fun
-# <@icefire> would also mean my massive bets would drive it up really quickly
-# <@icefire> until I go broke
-# <@sugoidesune> I'm not married to 10%
 
 #HATSTATS:
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
@@ -39,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.2";
+$VERSION = "2.4.3";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -55,8 +51,8 @@ Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
-if (! $hats{'BANK'}{'lotto_day'}){
-	$hats{'BANK'}{'lotto_day'} = (gmtime)[3];
+if (! $hats{'BANK'}{'lotto_last'}){
+	$hats{'BANK'}{'lotto_last'} = (gmtime)[2];
 }
 
 sub event_privmsg {
@@ -95,7 +91,7 @@ sub event_privmsg {
 		$return = (bank())[0];
 	} elsif ($text =~ s/^\s*\.bet//i){
 		$return = gamble($text, $nick);
-	} elsif ((gmtime)[3] != $hats{'BANK'}{'lotto_day'}){
+	} elsif ((gmtime)[2] != $hats{'BANK'}{'lotto_last'}){
 		($return, $target) = lottery($target);
 	} elsif ($text =~ /^\s*\.lotto/i){ # manually trigger lotteries for testing
 		my $pretender = (split /\@/, $mask)[-1];
@@ -384,28 +380,20 @@ sub gamble {
 	}
 	return $return;
 }
-
-#2.4.1
-# <@sugoidesune> .lotto
-# * hatbot writes a giant foam check for 187 hats and gives it to hal9001
-# <@sugoidesune> well that ...wait
-# <@sugoidesune> .lotto
-# * hatbot writes a giant foam check for 0 hats and gives it to
 sub lottery {
 	my @contestants;
-	my $pot;
+	my $pot = 0;
 
-	$hats{'BANK'}{'lotto_day'} = (gmtime)[3];
+	$hats{'BANK'}{'lotto_last'} = (gmtime)[2];
 
 	for my $p (keys %hats){
 		if (! $hats{$p}{'tx_ttl'}){ #initialize
 			$hats{$p}{'tx_ttl'} = 0;
 		}
 
-#this isn't a real lottery or raffle, for any number of reasons
-		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions today
+		#this isn't a real lottery or raffle, for any number of reasons
+		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions since last lottery
 			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most of) the day's transactions
-			$hats{$p}{'tx_ttl'} = 0; #zero it for tomorrow
 
 			if ($p ne 'BANK'){
 				push @contestants, $p;
@@ -414,11 +402,20 @@ sub lottery {
 	}
 	$pot = int $pot;
 
+	#TODO: consider making minimum $pot configurable
+	if ($pot < 100 || $#contestants > 2){ #I could let the single qualifying contestant win it, but...why
+		return 'STOP';
+	}
+
 	#now pick a winner
 	#bug(?): all nicks are lowercased because they're just the hash keys
 	my $w = $contestants[int rand @contestants];
 
 	$hats{$w}{'hats'} += $pot;
+
+	for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
+		$hats{$p}{'tx_ttl'} = 0;
+	}
 	
 	tied(%hats)->save;
 
