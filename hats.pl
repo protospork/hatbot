@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.5.0";
+$VERSION = "2.6.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -122,9 +122,7 @@ sub event_privmsg {
 }
 sub give_hats {
 	my $them = lc $_[0];
-	my $hats = 6;
-	$hats += int(rand(5));
-
+	my $hats = 50;
 	my $bonus;
 
 	my $past_hats = 0;
@@ -141,12 +139,14 @@ sub give_hats {
 
 	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
 
-	if (exists $hats{$them}{'last_time'}){
+	if (exists $hats{$them}{'last_time'}){ 
 		if (time - $hats{$them}{'last_time'} < $hat_timeout){
+			my $ratio = (1 - ($hat_timeout / (time - $hats{$them}{'last_time'})));
+			$hats *= $ratio; 
 
 			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
 			# <BoarderX> lol welfare hats
-			if ($hats{'BANK'}{'hats'} > 1000 && $hats{$them}{'hats'} < 10){
+			if ($hats < 1 && $hats{'BANK'}{'hats'} > 1000 && $hats{$them}{'hats'} < 10){
 				#initialize some stuff just to be safe
 				if (! exists $hats{$them}{'last_handout'}){
 					$hats{$them}{'last_handout'} = 0;
@@ -178,6 +178,7 @@ sub give_hats {
 		}
 	} else {
 		$hats{$them}{'last_time'} = 0;
+		$hats = 50;
 	}
 
 	$hats{$them}{'last_time'} = time;
