@@ -437,6 +437,7 @@ sub lottery {
 
 	if ($debug_mode){
 		print "Winner is $w";
+		print "hatbot contributed $bonus hats.";
 	}
 
 	for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
