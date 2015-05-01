@@ -427,7 +427,7 @@ sub lottery {
 	#hatbot's gonna sweeten the deal
 	my $bonus = 0;
 	if ($pot < ($hats{'BANK'}{'hats'} / 20)){ #5% is probably safe, right?
-		$bonus = $hats{'BANK'}{'hats'} / 20;
+		$bonus = int($hats{'BANK'}{'hats'} / 20);
 		$bonus %= 500; #let's not go crazy though
 	}
 
