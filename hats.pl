@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.3";
+$VERSION = "2.4.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -48,12 +48,19 @@ Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
 Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
+Irssi::settings_add_bool('hatbot', 'hat_debug_mode', 1);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
 if (! $hats{'BANK'}{'lotto_last'}){
 	$hats{'BANK'}{'lotto_last'} = (gmtime)[2];
 }
+my $debug_mode = Irssi::settings_get_bool('hat_debug_mode');
+
+#because I have no idea how irssi presents bools
+$debug_mode
+	? print "debug mode is $debug_mode (on)"
+	: print "debug mode is $debug_mode (off)";
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
@@ -328,10 +335,12 @@ sub gamble {
 		$bet = int($hats{lc $nick}{'hats'} / 2);
 		$custom++;
 	} elsif ($text =~ /mod(\d\d*)/i){
-		$bet = int($hats{lc $nick}{'hats'} % $1);
-		$custom++;
-		return "cannot read this shit." if !$1;
-		$bet = $1 if $bet == 0;
+		if ($1 && $1 != 0){
+			$bet = int($hats{lc $nick}{'hats'} % $1);
+			$custom++;
+		} else {
+			return "cannot read this shit.";
+		}
 	}
 
 	my $max_bet = $hats{'BANK'}{'hats'};
@@ -393,7 +402,7 @@ sub lottery {
 
 		#this isn't a real lottery or raffle, for any number of reasons
 		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions since last lottery
-			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most of) the day's transactions
+			$pot += $hats{$p}{'tx_ttl'} / 5; #pot is 20% of (most of) the day's transactions
 
 			if ($p ne 'BANK'){
 				push @contestants, $p;
@@ -402,8 +411,12 @@ sub lottery {
 	}
 	$pot = int $pot;
 
+	if ($debug_mode){
+		print "Jackpot is $pot hats. $#contestants eligible players.";
+	}
+
 	#TODO: consider making minimum $pot configurable
-	if ($pot < 100 || $#contestants > 2){ #I could let the single qualifying contestant win it, but...why
+	if ($pot < 100 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
 		return 'STOP';
 	}
 
@@ -412,6 +425,10 @@ sub lottery {
 	my $w = $contestants[int rand @contestants];
 
 	$hats{$w}{'hats'} += $pot;
+
+	if ($debug_mode){
+		print "Winner is $w";
+	}
 
 	for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
 		$hats{$p}{'tx_ttl'} = 0;
