@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.4";
+$VERSION = "2.4.5";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -424,7 +424,16 @@ sub lottery {
 	#bug(?): all nicks are lowercased because they're just the hash keys
 	my $w = $contestants[int rand @contestants];
 
+	#hatbot's gonna sweeten the deal
+	my $bonus = 0;
+	if ($pot < ($hats{'BANK'}{'hats'} / 20)){ #5% is probably safe, right?
+		$bonus = $hats{'BANK'}{'hats'} / 20;
+		$bonus %= 500; #let's not go crazy though
+	}
+
 	$hats{$w}{'hats'} += $pot;
+	$hats{$w}{'hats'} += $bonus;
+	$hats{'BANK'}{'hats'} -= $bonus;
 
 	if ($debug_mode){
 		print "Winner is $w";
@@ -443,7 +452,7 @@ sub lottery {
 		$there = $hats{$w}{'last_chan'};
 	}
 
-	return ("writes a giant foam check for $pot hats and gives it to $w", $there);
+	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
