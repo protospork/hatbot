@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.5";
+$VERSION = "2.4.6";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -412,11 +412,11 @@ sub lottery {
 	$pot = int $pot;
 
 	if ($debug_mode){
-		print "Jackpot is $pot hats. $#contestants eligible players.";
+		print "Jackpot is $pot hats. ".(scalar @contestants)." eligible players.";
 	}
 
 	#TODO: consider making minimum $pot configurable
-	if ($pot < 100 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
+	if ($pot < 100 || $#contestants < 1){ #I could let the single qualifying contestant win it, but...why
 		return 'STOP';
 	}
 
