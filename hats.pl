@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.4.6";
+$VERSION = "2.5.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -207,26 +207,37 @@ sub fedoras {
 
 	$bottom =~ s/^.+?dora\s*//i;
 	if ($bottom =~ /buyout/i){
+		#maybe this is a third party buyout
+		my $recipient = lc((split /\s+/, $bottom)[-1]);
+		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
+			if ($debug_mode){
+				print "$top is trying to buy out one of $recipient"."'s fedoras.";
+			}
+		#but it probably isn't
+		} else { 
+			$recipient = $top;
+		}
+
 		my $charge = fedora_buyout_price($top);
 
 		if ($hats{lc $top}{'hats'} < $charge){
 			return "knows you don't have $charge hats.";
-		} elsif ($hats{lc $top}{'fedoras'} == 0){
+		} elsif ($hats{lc $recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
 		}
 
 		$hats{lc $top}{'hats'} -= $charge;
 		$hats{lc $top}{'tx_ttl'} += $charge;
-		$hats{lc $top}{'fedoras'} -= 1;
+		$hats{lc $recipient}{'fedoras'} -= 1;
 		$hats{'BANK'}{'hats'} += $charge;
 
 		tied(%hats)->save;
 
 		my $out = 'misplaces a fedora while accepting '.$top.'\'s gift of '.$charge.' hats. ';
-		if ($hats{lc $top}{'fedoras'} > 0){
-			$out .= $top.' will have to make do with '.$hats{lc $top}{'fedoras'}.' fedoras.';
+		if ($hats{lc $recipient}{'fedoras'} > 0){
+			$out .= $recipient.' will have to make do with '.$hats{lc $recipient}{'fedoras'}.' fedoras.';
 		} else {
-			$out .= $top.' is out of fedoras. Hatbot apologizes.';
+			$out .= $recipient.' is out of fedoras. Hatbot apologizes.';
 		}
 		return $out;
 	} else {
@@ -402,7 +413,7 @@ sub lottery {
 
 		#this isn't a real lottery or raffle, for any number of reasons
 		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions since last lottery
-			$pot += $hats{$p}{'tx_ttl'} / 5; #pot is 20% of (most of) the day's transactions
+			$pot += $hats{$p}{'tx_ttl'} / 5; #pot is 20% of (most) transactions
 
 			if ($p ne 'BANK'){
 				push @contestants, $p;
