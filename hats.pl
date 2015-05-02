@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.0";
+$VERSION = "2.6.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -79,14 +79,16 @@ sub event_privmsg {
 
 	#how many hoops would I need to jump through to get switch statements back
 	if ($text =~ /^\s*\.hats?\b/i){
-		if ($text =~ /party/){
+		if ($text =~ /\bparty\b/i){
 			my $pretender = (split /\@/, $mask)[-1];
 			if ($hat_lords =~ /$pretender/i){
 				reset_times();
 				$return = 'obeys.';
 			}
+		} elsif ($text =~ /\bcheck\b/i){
+			$return = (give_hats($nick, 1))[0];
 		} else {
-			$return = (give_hats($nick))[0];
+			$return = (give_hats($nick, 0))[0];
 		}
 	} elsif ($text =~ /^\s*\.fedora/i){
 		$return = fedoras($nick, $text);
@@ -125,6 +127,8 @@ sub give_hats {
 	my $hats = 50;
 	my $bonus;
 
+	my $safe = $_[1];
+
 	my $past_hats = 0;
 	if (exists $hats{$them}{'hats'}){
 		$past_hats = $hats{$them}{'hats'};
@@ -141,8 +145,13 @@ sub give_hats {
 
 	if (exists $hats{$them}{'last_time'}){ 
 		if (time - $hats{$them}{'last_time'} < $hat_timeout){
-			my $ratio = (1 - ($hat_timeout / (time - $hats{$them}{'last_time'})));
-			$hats *= $ratio; 
+			$hats = (time - $hats{$them}{'last_time'});
+			$hats = int($hats / 300); 
+			# 300secs = 5min. add one hat per 5min
+			# that's 12 hats per hour, but
+			# if they manage 3 hours (36 hats),
+			# boost it to 50
+			$hats = 50 if $hats > 36;
 
 			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
 			# <BoarderX> lol welfare hats
@@ -169,16 +178,38 @@ sub give_hats {
 					return $out;
 				}
 			}
-			my $no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
-			$hats{$them}{'flood'}++;
-			if ($hats{$them}{'flood'} > 1 && time - $hats{$them}{'last_trigger'} < 2){
-				return 'STOP';
+
+			my $no;
+			if ($hats == 0){
+				if (! $safe){
+					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
+
+					#punish them for their impatience
+					if ($debug_mode){
+						print $_[0]." just delayed his max payout by 10 minutes.";
+					}
+					$hats{$them}{'last_time'} += 600;
+				} else {
+					$no = hat_check($_[0]);
+				}
+
+				$hats{$them}{'flood'}++;
+
+				tied(%hats)->save;
+
+				if ($hats{$them}{'flood'} > 1 && time - $hats{$them}{'last_trigger'} < 2){
+					return 'STOP';
+				}
+				return $no;
 			}
-			return $no;
 		}
 	} else {
 		$hats{$them}{'last_time'} = 0;
 		$hats = 50;
+	}
+
+	if ($hats < 50 && $safe){
+		return hat_check($_[0]);
 	}
 
 	$hats{$them}{'last_time'} = time;
@@ -202,6 +233,11 @@ sub give_hats {
 		$out = 'gives '.$hats.' hats to '.$_[0].' for a total of '.$new_hats.' hats.';
 	}
 	return ($out, $hats, $new_hats);
+}
+sub hat_check {
+	my $them = lc $_[0];
+	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
+	return 'has '.$_[0].' at '.$hats{$them}{'hats'}.' hats. '.$_[0].' is due for max hats at '.(gmtime($hats{$them}{'last_time'} + $hat_timeout)).' UTC.';
 }
 sub fedoras {
 	my ($top, $bottom) = @_;
