@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.6";
+$VERSION = "2.6.7";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -150,8 +150,16 @@ sub give_hats {
 			# 300secs = 5min. add one hat per 5min
 			# that's 12 hats per hour, but
 			# if they manage 3 hours (36 hats),
+			# use hatbot's wallet to
 			# boost it to 50
-			$hats = 50 if $hats > 36;
+			if ($hats >= 36){
+				$hats = 36;
+				if ($hats{'BANK'}{'hats'} > 14){
+					$hats{'BANK'}{'hats'} -= 14;
+					$hats = 50;
+				}
+			}
+
 
 			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
 			# <BoarderX> lol welfare hats
@@ -205,10 +213,15 @@ sub give_hats {
 		}
 	} else {
 		$hats{$them}{'last_time'} = 0;
-		$hats = 50;
+		if ($hats{'BANK'}{'hats'} > 14){
+			$hats{'BANK'}{'hats'} -= 14;
+			$hats = 50;
+		} else {
+			$hats = 36;
+		}
 	}
 
-	if ($hats < 50 && $safe){
+	if ($hats < 36 && $safe){
 		return hat_check($_[0]);
 	}
 
@@ -244,12 +257,12 @@ sub fedoras {
 
 	$bottom =~ s/^.+?dora\s*//i;
 	if ($bottom =~ /buyout/i){
-		#maybe this is a third party buyout
+		#maybe this is altruism
 		my $recipient = lc((split /\s+/, $bottom)[-1]);
 		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
-			if ($debug_mode){
-				print "$top is trying to buy out one of $recipient"."'s fedoras.";
-			}
+			# if ($debug_mode){
+			# 	print "$top is trying to buy out one of $recipient"."'s fedoras.";
+			# }
 		#but it probably isn't
 		} else { 
 			$recipient = $top;
@@ -476,7 +489,7 @@ sub lottery {
 	my $bonus = 0;
 	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
 		$bonus = int($hats{'BANK'}{'hats'} / 24);
-		$bonus %= (4 * $pot); #I have no rational basis for this number
+		$bonus %= (8 * $pot); #I have no rational basis for this number
 	}
 
 	$hats{$w}{'hats'} += $pot;
@@ -543,6 +556,7 @@ sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolu
 	$out =~ s/3h/three hours/;
 
 	$out =~ s/\D0m//;
+	$out =~ s/^30m/half an hour/;
 	$out =~ s/hour30m/hour and a half/;
 	$out =~ s/hours30m/and a half hours/;
 	return $out;
