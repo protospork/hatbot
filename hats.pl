@@ -476,6 +476,7 @@ sub lottery {
 	my $bonus = 0;
 	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
 		$bonus = int($hats{'BANK'}{'hats'} / 24);
+		$bonus %= (4 * $pot); #I have no rational basis for this number
 	}
 
 	$hats{$w}{'hats'} += $pot;
