@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.7";
+$VERSION = "2.6.8";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -124,7 +124,7 @@ sub event_privmsg {
 }
 sub give_hats {
 	my $them = lc $_[0];
-	my $hats = 50;
+	my $hats = 36;
 	my $bonus;
 
 	my $safe = $_[1];
@@ -151,13 +151,9 @@ sub give_hats {
 			# that's 12 hats per hour, but
 			# if they manage 3 hours (36 hats),
 			# use hatbot's wallet to
-			# boost it to 50
+			# boost it to 50 (later)
 			if ($hats >= 36){
 				$hats = 36;
-				if ($hats{'BANK'}{'hats'} > 14){
-					$hats{'BANK'}{'hats'} -= 14;
-					$hats = 50;
-				}
 			}
 
 
@@ -213,16 +209,14 @@ sub give_hats {
 		}
 	} else {
 		$hats{$them}{'last_time'} = 0;
-		if ($hats{'BANK'}{'hats'} > 14){
-			$hats{'BANK'}{'hats'} -= 14;
-			$hats = 50;
-		} else {
-			$hats = 36;
-		}
+		$hats = 36;
 	}
 
 	if ($hats < 36 && $safe){
 		return hat_check($_[0]);
+	} elsif ($hats == 36 && $hats{'BANK'}{'hats'} > 14){
+		$hats{'BANK'}{'hats'} -= 14;
+		$hats = 50;
 	}
 
 	$hats{$them}{'last_time'} = time;
@@ -555,7 +549,7 @@ sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolu
 	$out =~ s/2h/two hours/;
 	$out =~ s/3h/three hours/;
 
-	$out =~ s/\D0m//;
+	$out =~ s/(?<!\d)0m//;
 	$out =~ s/^30m/half an hour/;
 	$out =~ s/hour30m/hour and a half/;
 	$out =~ s/hours30m/and a half hours/;
