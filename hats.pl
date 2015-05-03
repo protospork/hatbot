@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.5";
+$VERSION = "2.6.6";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -237,7 +237,7 @@ sub give_hats {
 sub hat_check {
 	my $them = lc $_[0];
 	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
-	return 'has '.$_[0].' at '.$hats{$them}{'hats'}.' hats. '.$_[0].' is due for max hats at '.(gmtime($hats{$them}{'last_time'} + $hat_timeout)).' UTC.';
+	return 'has '.$_[0].' at '.$hats{$them}{'hats'}.' hats. '.$_[0].' is due for max hats in '.fuzz($hats{$them}{'last_time'} + $hat_timeout).'.';
 }
 sub fedoras {
 	my ($top, $bottom) = @_;
@@ -502,6 +502,50 @@ sub lottery {
 	}
 
 	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
+}
+sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolute times
+	my $then = $_[0];
+	my $len = $then - time;
+
+	my %hms = (
+		hour => 0,
+		min => 0,
+		sec => 0,
+	);
+
+	if ($len >= 3600){
+		$hms{'hour'} = int($len / 3600);
+	}
+	if ($len % 3600 >= 60){
+		$hms{'min'} = int(($len % 3600) / 60);
+	}
+	if ($len % 60){
+		$hms{'sec'} = $len % 60;
+	}
+
+	if ($hms{'min'} < 15){
+		$hms{'fmin'} = 0;
+		$hms{'fhour'} = $hms{'hour'};
+	} elsif ($hms{'min'} > 45){
+		$hms{'fhour'} = $hms{'hour'} + 1;
+		$hms{'fmin'} = 0;
+	} else {
+		$hms{'fmin'} = 30;
+		$hms{'fhour'} = $hms{'hour'};
+	}
+
+	my $out = $hms{'fhour'}.'h'.$hms{'fmin'}.'m';
+
+	#don't laugh unless you can show me something better
+	$out =~ s/0h//;
+	$out =~ s/1h/an hour/;
+	$out =~ s/2h/two hours/;
+	$out =~ s/3h/three hours/;
+
+	$out =~ s/\D0m//;
+	$out =~ s/hour30m/hour and a half/;
+	$out =~ s/hours30m/and a half hours/;
+	return $out;
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
