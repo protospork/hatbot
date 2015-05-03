@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.4";
+$VERSION = "2.6.5";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -155,7 +155,7 @@ sub give_hats {
 
 			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
 			# <BoarderX> lol welfare hats
-			if ($hats < 1 && $hats{'BANK'}{'hats'} > 1000 && $hats{$them}{'hats'} < 10){
+			if ($hats < 1 && $hats{'BANK'}{'hats'} > 2000 && $hats{$them}{'hats'} < 10){
 				#initialize some stuff just to be safe
 				if (! exists $hats{$them}{'last_handout'}){
 					$hats{$them}{'last_handout'} = 0;
@@ -165,7 +165,7 @@ sub give_hats {
 				}
 
 				# make fedoras affect the payout
-				my $gift = 50 - $hats{$them}{'fedoras'};
+				my $gift = 100 - (2 * $hats{$them}{'fedoras'});
 				# only one welfare payout per 24h
 				if (time - $hats{$them}{'last_handout'} > 86400 && $gift > 0){
 					$hats{$them}{'last_handout'} = time;
@@ -182,12 +182,12 @@ sub give_hats {
 			my $no;
 			if ($hats == 0){
 				if (! $safe){
+				#punish them for their impatience
 					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
 
-					#punish them for their impatience
-					if ($debug_mode){
-						print $_[0]." just delayed his max payout by 10 minutes.";
-					}
+					# if ($debug_mode){
+					# 	print $_[0]." just delayed his max payout by 10 minutes.";
+					# }
 					$hats{$them}{'last_time'} += 600;
 				} else {
 					$no = hat_check($_[0]);
@@ -255,7 +255,7 @@ sub fedoras {
 			$recipient = $top;
 		}
 
-		my $charge = fedora_buyout_price($top);
+		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
 
 		if ($hats{lc $top}{'hats'} < $charge){
 			return "knows you don't have $charge hats.";
@@ -474,9 +474,8 @@ sub lottery {
 
 	#hatbot's gonna sweeten the deal
 	my $bonus = 0;
-	if ($pot < ($hats{'BANK'}{'hats'} / 20)){ #5% is probably safe, right?
-		$bonus = int($hats{'BANK'}{'hats'} / 20);
-		$bonus %= 500; #let's not go crazy though
+	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
+		$bonus = int($hats{'BANK'}{'hats'} / 24);
 	}
 
 	$hats{$w}{'hats'} += $pot;
