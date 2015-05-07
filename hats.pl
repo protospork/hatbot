@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.6.8";
+$VERSION = "2.7.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -49,6 +49,7 @@ Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
 Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
 Irssi::settings_add_bool('hatbot', 'hat_debug_mode', 1);
+Irssi::settings_add_bool('hatbot', 'hat_fiat_hats', 1);
 
 
 tie my %hats, 'Tie::YAML', $ENV{HOME}.'/.irssi/scripts/cfg/hats.po' or die $!;
@@ -56,11 +57,7 @@ if (! $hats{'BANK'}{'lotto_last'}){
 	$hats{'BANK'}{'lotto_last'} = (gmtime)[2];
 }
 my $debug_mode = Irssi::settings_get_bool('hat_debug_mode');
-
-#because I have no idea how irssi presents bools
-$debug_mode
-	? print "debug mode is $debug_mode (on)"
-	: print "debug mode is $debug_mode (off)";
+my $hat_creation = Irssi::settings_get_bool('hat_fiat_hats');
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
@@ -170,16 +167,20 @@ sub give_hats {
 
 				# make fedoras affect the payout
 				my $gift = 100 - (2 * $hats{$them}{'fedoras'});
-				# only one welfare payout per 24h
-				if (time - $hats{$them}{'last_handout'} > 86400 && $gift > 0){
-					$hats{$them}{'last_handout'} = time;
+				if ($hat_creation){
+					# only one welfare payout per 24h
+					if (time - $hats{$them}{'last_handout'} > 86400 && $gift > 0){
+						$hats{$them}{'last_handout'} = time;
 
-					$hats{$them}{'hats'} += $gift;
-					$hats{'BANK'}{'hats'} -= $gift;
-					tied(%hats)->save;
+						$hats{$them}{'hats'} += $gift;
+						$hats{'BANK'}{'hats'} -= $gift;
+						tied(%hats)->save;
 
-					my $out = 'is giving you '.$gift.' hats from his personal fund, '.$_[0].'. Please try to get your life back on track.';
-					return $out;
+						my $out = 'is giving you '.$gift.' hats from his personal fund, '.$_[0].'. Please try to get your life back on track.';
+						return $out;
+					}
+				} else { #if everything's coming out of hatbot's pocket, be more stingy
+					$gift = 0;
 				}
 			}
 
@@ -189,9 +190,6 @@ sub give_hats {
 				#punish them for their impatience
 					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
 
-					# if ($debug_mode){
-					# 	print $_[0]." just delayed his max payout by 10 minutes.";
-					# }
 					$hats{$them}{'last_time'} += 600;
 				} else {
 					$no = hat_check($_[0]);
@@ -224,12 +222,24 @@ sub give_hats {
 	
 	my $new_hats = $hats + $past_hats;
 
-	if (int(rand(100)) > 95){
-		$new_hats = $past_hats + 111;
-		$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
+	if (! $hat_creation){ #hatbot is more careful with his own assets
+		if (int(rand(100)) > 95){
+			$new_hats = $past_hats + 111;
+			$bonus = 'has a sticky keyboard, resulting in 111 hats for '.$_[0].'!';
+		}
+	}
+	if ($hat_creation){
+		if ($hats > $hats{'BANK'}{'hats'}){
+			$hats = $hats{'BANK'}{'hats'};
+			$new_hats = $past_hats + $hats{'BANK'}{'hats'};
+		}
+		if ($hats{'BANK'}{'hats'} <= 0){
+			return 'is ruined.';
+		}
 	}
 
 	$hats{$them}{'hats'} = $new_hats;
+	$hats{'BANK'}{'hats'} -= $hats;
 
 	tied(%hats)->save;
 
@@ -484,6 +494,11 @@ sub lottery {
 	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
 		$bonus = int($hats{'BANK'}{'hats'} / 24);
 		$bonus %= (8 * $pot); #I have no rational basis for this number
+	}
+
+	if (! $hat_creation){ #oh wait are there even hats
+		if ($bonus < $pot){ return 'STOP'; }
+		$pot = 0;
 	}
 
 	$hats{$w}{'hats'} += $pot;
