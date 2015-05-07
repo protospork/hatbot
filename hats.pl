@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.7.0";
+$VERSION = "2.8.0";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -58,6 +58,7 @@ if (! $hats{'BANK'}{'lotto_last'}){
 }
 my $debug_mode = Irssi::settings_get_bool('hat_debug_mode');
 my $hat_creation = Irssi::settings_get_bool('hat_fiat_hats');
+my $already_poor = 0;
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
@@ -106,6 +107,8 @@ sub event_privmsg {
 		} else {
 			return;
 		}
+	} elsif ($hats{'BANK'}{'hats'} == 0){
+		$return = go_bankrupt();
 	} else {
 		return;
 	}
@@ -570,6 +573,40 @@ sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolu
 	$out =~ s/hour30m/hour and a half/;
 	$out =~ s/hours30m/and a half hours/;
 	return $out;
+}
+sub drain_fedoras {
+	my ($tgt, $quant, $price) = @_;
+
+	if (! exists $hats{$tgt}{'fedoras'}){
+		return 0;
+	}
+
+	my $o = $hats{$tgt}{'fedoras'};
+	$o *= $price;
+
+	$hats{$tgt}{'fedoras'} = 0;
+	#don't save to disk in here or it'll take years
+	return $o;
+}
+sub go_bankrupt {
+	if ($already_poor){
+		return 'STOP';
+	}
+	my $payout = 0;
+	for my $v (keys %hats){
+		$payout += drain_fedoras($v, 'max', Irssi::settings_get_int('hat_fedora_price'));
+	}
+
+	if ($payout == 0){
+		$already_poor++;
+		return 'STOP';
+	}
+	$already_poor = 0;
+
+	$hats{'BANK'}{'hats'} += $payout;
+	tied(%hats)->save;
+
+	return 'sells all the fedoras and reincorporates under a different name.';
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
