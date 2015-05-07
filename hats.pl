@@ -3,9 +3,6 @@
 
 # also prob raise fedora price depending on your fedoras
 
-# change hat drops from random to hours_gone * 5 maxed at 50 or something
-# so hat party rules would give us all 50, I guess. that's fine
-
 # if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
 
 # <@BEES> I feel like I should set up some sort of global odds boost centered around fedoraing hatbot, but also I have no idea how that would work
@@ -30,6 +27,9 @@
 #HATSTATS:
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
 #maybe don't do this until SQL happens?
+
+#NEW MODE: FIXED AMOUNT OF HATS
+#- when someone bankrupts hatbot, he sells off all fedoras in play
 
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
@@ -544,6 +544,7 @@ sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolu
 	my $out = $hms{'fhour'}.'h'.$hms{'fmin'}.'m';
 
 	#don't laugh unless you can show me something better
+	$out =~ s/0h0m/time/;
 	$out =~ s/0h//;
 	$out =~ s/1h/an hour/;
 	$out =~ s/2h/two hours/;
