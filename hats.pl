@@ -3,9 +3,6 @@
 
 # also prob raise fedora price depending on your fedoras
 
-# change hat drops from random to hours_gone * 5 maxed at 50 or something
-# so hat party rules would give us all 50, I guess. that's fine
-
 # if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
 
 # <@BEES> I feel like I should set up some sort of global odds boost centered around fedoraing hatbot, but also I have no idea how that would work
@@ -31,11 +28,14 @@
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
 #maybe don't do this until SQL happens?
 
+#NEW MODE: FIXED AMOUNT OF HATS
+#- when someone bankrupts hatbot, he sells off all fedoras in play
+
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.5.0";
+$VERSION = "2.6.8";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -79,14 +79,16 @@ sub event_privmsg {
 
 	#how many hoops would I need to jump through to get switch statements back
 	if ($text =~ /^\s*\.hats?\b/i){
-		if ($text =~ /party/){
+		if ($text =~ /\bparty\b/i){
 			my $pretender = (split /\@/, $mask)[-1];
 			if ($hat_lords =~ /$pretender/i){
 				reset_times();
 				$return = 'obeys.';
 			}
+		} elsif ($text =~ /\bcheck\b/i){
+			$return = (give_hats($nick, 1))[0];
 		} else {
-			$return = (give_hats($nick))[0];
+			$return = (give_hats($nick, 0))[0];
 		}
 	} elsif ($text =~ /^\s*\.fedora/i){
 		$return = fedoras($nick, $text);
@@ -122,10 +124,10 @@ sub event_privmsg {
 }
 sub give_hats {
 	my $them = lc $_[0];
-	my $hats = 6;
-	$hats += int(rand(5));
-
+	my $hats = 36;
 	my $bonus;
+
+	my $safe = $_[1];
 
 	my $past_hats = 0;
 	if (exists $hats{$them}{'hats'}){
@@ -141,12 +143,23 @@ sub give_hats {
 
 	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
 
-	if (exists $hats{$them}{'last_time'}){
+	if (exists $hats{$them}{'last_time'}){ 
 		if (time - $hats{$them}{'last_time'} < $hat_timeout){
+			$hats = (time - $hats{$them}{'last_time'});
+			$hats = int($hats / 300); 
+			# 300secs = 5min. add one hat per 5min
+			# that's 12 hats per hour, but
+			# if they manage 3 hours (36 hats),
+			# use hatbot's wallet to
+			# boost it to 50 (later)
+			if ($hats >= 36){
+				$hats = 36;
+			}
+
 
 			# <~sugoidesune> maybe instead of globally boosting the drop rate I could just throw a few extra from hatbot's own stash at the poorer players
 			# <BoarderX> lol welfare hats
-			if ($hats{'BANK'}{'hats'} > 1000 && $hats{$them}{'hats'} < 10){
+			if ($hats < 1 && $hats{'BANK'}{'hats'} > 2000 && $hats{$them}{'hats'} < 10){
 				#initialize some stuff just to be safe
 				if (! exists $hats{$them}{'last_handout'}){
 					$hats{$them}{'last_handout'} = 0;
@@ -156,7 +169,7 @@ sub give_hats {
 				}
 
 				# make fedoras affect the payout
-				my $gift = 50 - $hats{$them}{'fedoras'};
+				my $gift = 100 - (2 * $hats{$them}{'fedoras'});
 				# only one welfare payout per 24h
 				if (time - $hats{$them}{'last_handout'} > 86400 && $gift > 0){
 					$hats{$them}{'last_handout'} = time;
@@ -169,15 +182,41 @@ sub give_hats {
 					return $out;
 				}
 			}
-			my $no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
-			$hats{$them}{'flood'}++;
-			if ($hats{$them}{'flood'} > 1 && time - $hats{$them}{'last_trigger'} < 2){
-				return 'STOP';
+
+			my $no;
+			if ($hats == 0){
+				if (! $safe){
+				#punish them for their impatience
+					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
+
+					# if ($debug_mode){
+					# 	print $_[0]." just delayed his max payout by 10 minutes.";
+					# }
+					$hats{$them}{'last_time'} += 600;
+				} else {
+					$no = hat_check($_[0]);
+				}
+
+				$hats{$them}{'flood'}++;
+
+				tied(%hats)->save;
+
+				if ($hats{$them}{'flood'} > 1 && time - $hats{$them}{'last_trigger'} < 2){
+					return 'STOP';
+				}
+				return $no;
 			}
-			return $no;
 		}
 	} else {
 		$hats{$them}{'last_time'} = 0;
+		$hats = 36;
+	}
+
+	if ($hats < 36 && $safe){
+		return hat_check($_[0]);
+	} elsif ($hats == 36 && $hats{'BANK'}{'hats'} > 14){
+		$hats{'BANK'}{'hats'} -= 14;
+		$hats = 50;
 	}
 
 	$hats{$them}{'last_time'} = time;
@@ -202,23 +241,28 @@ sub give_hats {
 	}
 	return ($out, $hats, $new_hats);
 }
+sub hat_check {
+	my $them = lc $_[0];
+	my $hat_timeout = Irssi::settings_get_int('hat_timeout');
+	return 'has '.$_[0].' at '.$hats{$them}{'hats'}.' hats. '.$_[0].' is due for max hats in '.fuzz($hats{$them}{'last_time'} + $hat_timeout).'.';
+}
 sub fedoras {
 	my ($top, $bottom) = @_;
 
 	$bottom =~ s/^.+?dora\s*//i;
 	if ($bottom =~ /buyout/i){
-		#maybe this is a third party buyout
+		#maybe this is altruism
 		my $recipient = lc((split /\s+/, $bottom)[-1]);
 		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
-			if ($debug_mode){
-				print "$top is trying to buy out one of $recipient"."'s fedoras.";
-			}
+			# if ($debug_mode){
+			# 	print "$top is trying to buy out one of $recipient"."'s fedoras.";
+			# }
 		#but it probably isn't
 		} else { 
 			$recipient = $top;
 		}
 
-		my $charge = fedora_buyout_price($top);
+		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
 
 		if ($hats{lc $top}{'hats'} < $charge){
 			return "knows you don't have $charge hats.";
@@ -437,9 +481,9 @@ sub lottery {
 
 	#hatbot's gonna sweeten the deal
 	my $bonus = 0;
-	if ($pot < ($hats{'BANK'}{'hats'} / 20)){ #5% is probably safe, right?
-		$bonus = int($hats{'BANK'}{'hats'} / 20);
-		$bonus %= 500; #let's not go crazy though
+	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
+		$bonus = int($hats{'BANK'}{'hats'} / 24);
+		$bonus %= (8 * $pot); #I have no rational basis for this number
 	}
 
 	$hats{$w}{'hats'} += $pot;
@@ -465,6 +509,52 @@ sub lottery {
 	}
 
 	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
+}
+sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolute times
+	my $then = $_[0];
+	my $len = $then - time;
+
+	my %hms = (
+		hour => 0,
+		min => 0,
+		sec => 0,
+	);
+
+	if ($len >= 3600){
+		$hms{'hour'} = int($len / 3600);
+	}
+	if ($len % 3600 >= 60){
+		$hms{'min'} = int(($len % 3600) / 60);
+	}
+	if ($len % 60){
+		$hms{'sec'} = $len % 60;
+	}
+
+	if ($hms{'min'} < 15){
+		$hms{'fmin'} = 0;
+		$hms{'fhour'} = $hms{'hour'};
+	} elsif ($hms{'min'} > 45){
+		$hms{'fhour'} = $hms{'hour'} + 1;
+		$hms{'fmin'} = 0;
+	} else {
+		$hms{'fmin'} = 30;
+		$hms{'fhour'} = $hms{'hour'};
+	}
+
+	my $out = $hms{'fhour'}.'h'.$hms{'fmin'}.'m';
+
+	#don't laugh unless you can show me something better
+	$out =~ s/0h0m/time/;
+	$out =~ s/0h//;
+	$out =~ s/1h/an hour/;
+	$out =~ s/2h/two hours/;
+	$out =~ s/3h/three hours/;
+
+	$out =~ s/(?<!\d)0m//;
+	$out =~ s/^30m/half an hour/;
+	$out =~ s/hour30m/hour and a half/;
+	$out =~ s/hours30m/and a half hours/;
+	return $out;
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
