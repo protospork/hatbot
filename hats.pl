@@ -279,7 +279,7 @@ sub fedoras {
 
 		if ($hats{lc $top}{'hats'} < $charge){
 			return "knows you don't have $charge hats.";
-		} elsif ($hats{lc $recipient}{'fedoras'} == 0){
+		} elsif ($hats{lc $recipient}{'fedoras'} == 0){ #this should actually be first
 			return "cannot solve your problems.";
 		}
 
@@ -312,7 +312,6 @@ sub fedoras {
 		$hats{lc $top}{'hats'} -= $price;
 		$hats{lc $top}{'tx_ttl'} += $price;
 		$hats{lc $bottom}{'fedoras'} += 1;
-		$hats{lc $bottom}{'tx_ttl'} += $price;
 
 		$hats{'BANK'}{'hats'} += $price;
 
@@ -489,6 +488,7 @@ sub lottery {
 	}
 
 	#now pick a winner
+	#TODO: make fedoras drop chances
 	#bug(?): all nicks are lowercased because they're just the hash keys
 	my $w = $contestants[int rand @contestants];
 
