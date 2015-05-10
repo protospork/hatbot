@@ -277,11 +277,11 @@ sub fedoras {
 
 		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
 
-		if ($hats{lc $top}{'hats'} < $charge){
-			return "knows you don't have $charge hats.";
-		} elsif ($hats{lc $recipient}{'fedoras'} == 0){ #this should actually be first
+		if ($hats{lc $recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
-		}
+		} elsif ($hats{lc $top}{'hats'} < $charge){
+			return "knows you don't have $charge hats.";
+		}		
 
 		$hats{lc $top}{'hats'} -= $charge;
 		$hats{lc $top}{'tx_ttl'} += $charge;
