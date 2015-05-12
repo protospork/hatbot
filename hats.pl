@@ -5,6 +5,8 @@
 
 # if you wanna get fancy make the antiflood detect repeated triggers / outputs and only clam up for those
 
+# <@penguins> hatbot should start charging people a fee for fedora maintenance
+
 # <@BEES> I feel like I should set up some sort of global odds boost centered around fedoraing hatbot, but also I have no idea how that would work
 # <@Tar> for betting
 # <@Tar> fedoras affect people the current way
@@ -28,14 +30,11 @@
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
 #maybe don't do this until SQL happens?
 
-#NEW MODE: FIXED AMOUNT OF HATS
-#- when someone bankrupts hatbot, he sells off all fedoras in play
-
 use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.8.0";
+$VERSION = "2.9.3";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -263,9 +262,19 @@ sub fedoras {
 	my ($top, $bottom) = @_;
 
 	$bottom =~ s/^.+?dora\s*//i;
-	if ($bottom =~ /buyout/i){
+	my @params = split /\s+/, $bottom;
+
+	if ($params[-1] != 0 + $params[-1]){
+		push @params, 1;
+	}
+
+	if ($debug_mode){
+		print $_ for @params;
+	}
+
+	if (lc $params[0] eq 'buyout'){
 		#maybe this is altruism
-		my $recipient = lc((split /\s+/, $bottom)[-1]);
+		my $recipient = lc $params[1];
 		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
 			# if ($debug_mode){
 			# 	print "$top is trying to buy out one of $recipient"."'s fedoras.";
@@ -275,7 +284,12 @@ sub fedoras {
 			$recipient = $top;
 		}
 
+		if (0 + $params[-1] > $hats{$recipient}{'fedoras'}){
+			$params[-1] = $hats{$recipient}{'fedoras'};
+		}
+
 		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
+		$charge *= $params[-1];
 
 		if ($hats{lc $recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
@@ -285,12 +299,16 @@ sub fedoras {
 
 		$hats{lc $top}{'hats'} -= $charge;
 		$hats{lc $top}{'tx_ttl'} += $charge;
-		$hats{lc $recipient}{'fedoras'} -= 1;
+		$hats{lc $recipient}{'fedoras'} -= $params[-1];
 		$hats{'BANK'}{'hats'} += $charge;
 
 		tied(%hats)->save;
 
 		my $out = 'misplaces a fedora while accepting '.$top.'\'s gift of '.$charge.' hats. ';
+		if ($params[-1] != 1){
+			$out =~ s/a fedora/$params[-1] fedoras/;
+		}
+
 		if ($hats{lc $recipient}{'fedoras'} > 0){
 			$out .= $recipient.' will have to make do with '.$hats{lc $recipient}{'fedoras'}.' fedoras.';
 		} else {
@@ -298,20 +316,25 @@ sub fedoras {
 		}
 		return $out;
 	} else {
-		$bottom = (split /\s+/, $bottom)[0]; #might as well keep the markovs in this I guess
+		$bottom = lc $params[0];
 		if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
 			return "does not think $bottom is a person.";
 		} elsif (! $bottom || $bottom eq '') {
 			return "needs a target.";
 		}
+		if (! exists $params[1]){
+			push @params, 1;
+		}
+		$params[-1] = int $params[-1]; #just to be sure
 
 		my $price = Irssi::settings_get_int('hat_fedora_price');
+		$price *= $params[-1];
 		if ($hats{lc $top}{'hats'} < $price){
 			return "demands at least $price hats for this service.";
 		}
 		$hats{lc $top}{'hats'} -= $price;
 		$hats{lc $top}{'tx_ttl'} += $price;
-		$hats{lc $bottom}{'fedoras'} += 1;
+		$hats{lc $bottom}{'fedoras'} += $params[-1];
 
 		$hats{'BANK'}{'hats'} += $price;
 
