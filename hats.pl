@@ -34,7 +34,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.9.3";
+$VERSION = "2.9.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -219,7 +219,7 @@ sub give_hats {
 		$hats = 50;
 	}
 
-	$hats{$them}{'last_time'} = time;
+
 	$hats{$them}{'flood'} = 0;
 	
 	my $new_hats = $hats + $past_hats;
@@ -240,6 +240,7 @@ sub give_hats {
 		}
 	}
 
+	$hats{$them}{'last_time'} = time;
 	$hats{$them}{'hats'} = $new_hats;
 	$hats{'BANK'}{'hats'} -= $hats;
 
@@ -264,8 +265,10 @@ sub fedoras {
 	$bottom =~ s/^.+?dora\s*//i;
 	my @params = split /\s+/, $bottom;
 
-	if ($params[-1] != 0 + $params[-1]){
+	if ($params[-1] =~ /\D/){ #do a string operation to make sure it is a number
 		push @params, 1;
+	} else { #doing that regex might have turned it into a string? ┐(°o ° )┌
+		$params[-1] += 0;
 	}
 
 	if ($debug_mode){
@@ -284,7 +287,7 @@ sub fedoras {
 			$recipient = $top;
 		}
 
-		if (0 + $params[-1] > $hats{$recipient}{'fedoras'}){
+		if ($params[-1] > $hats{$recipient}{'fedoras'}){
 			$params[-1] = $hats{$recipient}{'fedoras'};
 		}
 
@@ -305,7 +308,7 @@ sub fedoras {
 		tied(%hats)->save;
 
 		my $out = 'misplaces a fedora while accepting '.$top.'\'s gift of '.$charge.' hats. ';
-		if ($params[-1] != 1){
+		if ($params[-1] > 1){
 			$out =~ s/a fedora/$params[-1] fedoras/;
 		}
 
@@ -325,7 +328,7 @@ sub fedoras {
 		if (! exists $params[1]){
 			push @params, 1;
 		}
-		$params[-1] = int $params[-1]; #just to be sure
+		$params[-1] = 0 + $params[-1]; #just to be sure
 
 		my $price = Irssi::settings_get_int('hat_fedora_price');
 		$price *= $params[-1];
