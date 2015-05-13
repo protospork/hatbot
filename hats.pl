@@ -34,7 +34,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.9.4";
+$VERSION = "2.9.5";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -343,7 +343,12 @@ sub fedoras {
 
 		tied(%hats)->save;
 
-		return 'takes '.$price.' of '.$top.'\'s hats and raises '.$bottom.'\'s enlightenment to '.(score($bottom))[-1];
+		my $return = 'takes '.$price.' of '.$top.'\'s hats and places a fedora on '.$bottom.'\'s head';
+		if ($params[-1] > 1){
+			$return =~ s/places a fedora/stacks $params[-1] fedoras/;
+		}
+
+		return $return;
 	}
 }
 sub fedora_buyout_price {
