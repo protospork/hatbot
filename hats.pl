@@ -34,7 +34,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.9.5";
+$VERSION = "2.10.1";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -454,14 +454,35 @@ sub gamble {
 		return "will not give you something for nothing.";
 	}
 
-	# adjust odds based on person's fedoras
+	# adjust odds
 	my $odds = 100;
+	my $bot_odds = 100;
+	my $mods = 0;
 	my $win; 
-	if (exists $hats{lc $nick}{'fedoras'}){
+	if (exists $hats{lc $nick}{'fedoras'}){ #punish them for fedora ownership
 		$odds -= $hats{lc $nick}{'fedoras'};
 	}
-	$win = int rand $odds;
-	if ($win >= 50){
+	if ($hats{lc $nick}{'hats'} / $bet > 10){ #punish them for betting safely
+		$mods -= 5;
+	} elsif ($hats{lc $nick}{'hats'} / $bet <= 2){ #also the reverse
+		$mods += 5;
+	}
+	if ($hats{lc $nick}{'hats'} > $hats{'BANK'}{'hats'}){ #punish them for being rich
+		$mods -= 5;
+	} else {
+		$mods += 5;
+	}
+
+	if (exists $hats{'hatbot'}{'fedoras'}){ #I'm hardcoding the bot's nick, shoot me
+		$bot_odds -= $hats{'hatbot'}{'fedoras'}; #also I'm using hatbot where everything else uses BANK
+	}
+
+	my @res = (rand $odds, $odds, $mods, $bot_odds, rand $bot_odds);
+	if ($debug_mode){
+		print "$nick bet: ".(join ', ', @res);
+	}
+
+	if (($res[0] + $mods) > $res[-1]){
 		$win = 1;
 	} else {
 		$win = 0;
