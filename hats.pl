@@ -396,7 +396,7 @@ sub pluralize { #always refer to "hats", never "hat"
 	$string =~ s/\b1 ([Hh])ats/1 $1at/gi;
 
 	#also we're doing comma grouping here, why not
-	$string =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $string =~ /\d{4}/;
+	$string =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $string =~ /\b\d{4}/;
 
 	return $string;
 }
