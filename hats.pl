@@ -25,6 +25,7 @@
 #-don't allow new nicks to gift hats (but it should be fine for them to receive hats?)
 #-they can only send one gift per 24h?
 #-they can't send gifts within 24 of getting charity?
+#-disallow gifting between users w/same host
 
 #HATSTATS:
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
@@ -34,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.4";
+$VERSION = "2.10.7";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -43,6 +44,7 @@ $VERSION = "2.10.4";
     license => 'MIT/X11'
 );
 Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
+Irssi::settings_add_str('hatbot', 'hat_flood_chan', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
@@ -58,11 +60,14 @@ if (! $hats{'BANK'}{'lotto_last'}){
 my $debug_mode = Irssi::settings_get_bool('hat_debug_mode');
 my $hat_creation = Irssi::settings_get_bool('hat_fiat_hats');
 my $already_poor = 0;
+my $srv; #making this global so I can pass it to log_chan
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
 	my ($target, $text) = split(/ :/, $data, 2);
 	my $return;
+
+	$srv = $server;
 
 	my @enabled_chans = split /,/, Irssi::settings_get_str('hat_channels');
 	my $hat_lords = Irssi::settings_get_str('hat_lords');
@@ -314,6 +319,7 @@ sub fedoras {
 		} else {
 			$out .= $recipient.' is out of fedoras. Hatbot apologizes.';
 		}
+		$already_poor = 0;
 		return $out;
 	} else {
 		$bottom = lc $params[0];
@@ -345,6 +351,7 @@ sub fedoras {
 			$return =~ s/places a fedora/stacks $params[-1] fedoras/;
 		}
 
+		$already_poor = 0;
 		return $return;
 	}
 }
@@ -387,6 +394,9 @@ sub score {
 sub pluralize { #always refer to "hats", never "hat"
 	my $string = $_[0];
 	$string =~ s/\b1 ([Hh])ats/1 $1at/gi;
+
+	#also we're doing comma grouping here, why not
+	# $string =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $string =~ /\d{4}/;
 
 	return $string;
 }
@@ -431,7 +441,7 @@ sub gamble {
 		$custom++;
 	} elsif ($text =~ /mod(\d\d*)/i){
 		if ($1 && $1 != 0){
-			$bet = int($hats{lc $nick}{'hats'} % $1);
+			$bet = int($hats{lc $nick}{'hats'} % $1) || $1;
 			$custom++;
 		} else {
 			return "cannot read this shit.";
@@ -500,6 +510,7 @@ sub gamble {
 		$hats{'BANK'}{'hats'} += $bet;
 
 		tied(%hats)->save;
+		$already_poor = 0;
 
 		$return = 'lowers '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
 	}
@@ -527,7 +538,7 @@ sub lottery {
 			}
 			if ($hats{$p}{'fedoras'} > 100){
 				next;
-			} elsif ($hats{$p}{'fedoras'} == 0){ #double their odds
+			} elsif (! exists $hats{$p}{'fedoras'} || $hats{$p}{'fedoras'} == 0){ #double their odds
 				push @contestants, $p;
 			}
 
@@ -543,9 +554,10 @@ sub lottery {
 		print "Jackpot is $pot hats.";
 		print "Contestants: ".(join ", ", @contestants);
 	}
+	log_chan("Contestants: ".(join ", ", @contestants));
 
 	#TODO: consider making minimum $pot configurable
-	if ($pot < 100 || $#contestants < 1){ #I could let the single qualifying contestant win it, but...why
+	if ($pot < 10000 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
 		return 'STOP';
 	}
 
@@ -560,7 +572,7 @@ sub lottery {
 	my $bonus = 0;
 	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
 		$bonus = int($hats{'BANK'}{'hats'} / 24);
-		$bonus %= (8 * $pot); #I have no rational basis for this number
+		# $bonus %= (8 * $pot); #I have no rational basis for this number
 	}
 
 	if (! $hat_creation){ #oh wait are there even hats
@@ -587,6 +599,7 @@ sub lottery {
 			print "hatbot took $pot hats";
 		}
 		$w = 'hatbot';
+		$already_poor = 0;
 	}
 	
 	tied(%hats)->save;
@@ -598,14 +611,17 @@ sub lottery {
 		$there = $hats{$w}{'last_chan'};
 	}
 
+	log_chan("$w wins ".($pot + $bonus)." hats ($pot + $bonus)");
 	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
 }
 sub find_richest {
-	my $richest = 0;
+	my $richest = [0, 0];
 	for (keys %hats){
+		no warnings; #these warnings are impossible so just ignore them
 		if ($hats{$_}{'hats'} > $richest->[1] && $_ ne 'BANK'){
 			$richest = [$_, $hats{$_}{'hats'}];
 		}
+		use warnings;
 	}
 	return $richest;
 }
@@ -687,7 +703,16 @@ sub go_bankrupt {
 	$hats{'BANK'}{'hats'} += $payout;
 	tied(%hats)->save;
 
+	log_chan('fedoras sold for '.$payout);
+
 	return 'sells all the fedoras and reincorporates under a different name.';
+}
+sub log_chan {
+	my $place = Irssi::settings_get_str('hat_flood_chan');
+
+	my $msg = $_[0];
+	$msg =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $msg =~ /\d{4}/; #comma pad numbers
+	$srv->command("msg $place $msg");
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
