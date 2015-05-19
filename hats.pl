@@ -711,7 +711,7 @@ sub log_chan {
 	my $place = Irssi::settings_get_str('hat_flood_chan');
 
 	my $msg = $_[0];
-	$msg =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $msg =~ /\d{4}/; #comma pad numbers
+	$string =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $string =~ /\b\d{4}/; #comma pad numbers
 	$srv->command("msg $place $msg");
 }
 
