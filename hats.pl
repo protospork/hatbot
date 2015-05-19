@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.7";
+$VERSION = "2.10.8";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -396,7 +396,7 @@ sub pluralize { #always refer to "hats", never "hat"
 	$string =~ s/\b1 ([Hh])ats/1 $1at/gi;
 
 	#also we're doing comma grouping here, why not
-	# $string =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $string =~ /\d{4}/;
+	$string =~ s/(?<=\d)(\d\d\d)\b/,$1/g while $string =~ /\d{4}/;
 
 	return $string;
 }
