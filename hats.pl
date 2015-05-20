@@ -269,9 +269,9 @@ sub fedoras {
 	my ($top, $bottom) = @_;
 
 	$bottom =~ s/^.+?dora\s*//i;
-	my @params = split /\s+/, $bottom;
+	return 'STOP' if length $bottom < 2; #fuck
 
-	return 'STOP' if $#params == 0; #jesus christ you people are dumb
+	my @params = split /\s+/, $bottom;
 
 	if ($params[-1] =~ /\D|^0$/){ #do a string operation to make sure it is a number
 		push @params, 1;
@@ -713,7 +713,7 @@ sub log_chan {
 	my $place = Irssi::settings_get_str('hat_flood_chan');
 
 	my $msg = $_[0];
-	$string =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $string =~ /\b\d{4}/; #comma pad numbers
+	$msg =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $msg =~ /\b\d{4}/; #comma pad numbers
 	$srv->command("msg $place $msg");
 }
 
