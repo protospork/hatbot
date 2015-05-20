@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.8";
+$VERSION = "2.10.9";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -270,6 +270,8 @@ sub fedoras {
 
 	$bottom =~ s/^.+?dora\s*//i;
 	my @params = split /\s+/, $bottom;
+
+	return 'STOP' if $#params == 0; #jesus christ you people are dumb
 
 	if ($params[-1] =~ /\D|^0$/){ #do a string operation to make sure it is a number
 		push @params, 1;
