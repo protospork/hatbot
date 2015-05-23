@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.9";
+$VERSION = "2.10.12";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -109,6 +109,7 @@ sub event_privmsg {
 		if ($hat_lords =~ /$pretender/i){
 			($return, $target) = lottery($target);
 		} else {
+			($return, $target) = enter_lotto($target);
 			return;
 		}
 	} elsif ($hats{'BANK'}{'hats'} == 0){
@@ -193,7 +194,7 @@ sub give_hats {
 			}
 
 			my $no;
-			if ($hats == 0){
+			if ($hats <= 0){
 				if (! $safe){
 				#punish them for their impatience
 					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
@@ -560,7 +561,13 @@ sub lottery {
 
 	#TODO: consider making minimum $pot configurable
 	if ($pot < 10000 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
-		return 'STOP';
+		log_chan('Jackpot only '.$pot);
+		if ($hats{'BANK'}{'hats'} == 0){
+			my $o = bailout();
+			return $o;
+		} else { 
+			return 'STOP';
+		}
 	}
 
 	my $max_pot = $leader->[1]; # equal to the worth of the #1 player
@@ -595,6 +602,7 @@ sub lottery {
 		for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
 			$hats{$p}{'tx_ttl'} = 0;
 		}
+		$hats{$leader->[0]}{'tx_ttl'} = 0; #also wipe the leader, removed from the array earlier
 	} else { #hatbot you motherfucker
 		$hats{'BANK'}{'hats'} += $pot;
 		if ($debug_mode){
@@ -615,6 +623,25 @@ sub lottery {
 
 	log_chan("$w wins ".($pot + $bonus)." hats ($pot + $bonus)");
 	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
+}
+sub enter_lotto {
+	my $tgt = lc $_[0];
+
+	if (! exists $hats{$tgt}{'hats'}){
+		$hats{$tgt}{'hats'} = 0;
+		return 'STOP';
+	}
+	if ($hats{$tgt}{'hats'} < 50){
+		return 'STOP';
+	}
+
+	$hats{$tgt}{'hats'} -= 50;
+	$hats{$tgt}{'tx_ttl'} += 50;
+	$hats{'BANK'}{'hats'} += 50;
+
+	tied(%hats)->save;
+
+	return "enters $tgt into the next lottery.";
 }
 sub find_richest {
 	my $richest = [0, 0];
@@ -708,6 +735,17 @@ sub go_bankrupt {
 	log_chan('fedoras sold for '.$payout);
 
 	return 'sells all the fedoras and reincorporates under a different name.';
+}
+sub bailout {
+	my $mark = find_richest();
+
+	$hats{'BANK'}{'hats'} = $mark->[1];
+	$hats{$mark->[0]}{'hats'} = 0;
+
+	$already_poor = 0;
+
+	log_chan('taking '.$mark->[1].' hats from '.$mark->[0]);
+	return 'graciously accepts '.$mark->[0].'\'s gift of '.$mark->[1].' hats.';
 }
 sub log_chan {
 	my $place = Irssi::settings_get_str('hat_flood_chan');
