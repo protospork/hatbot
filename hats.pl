@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.12";
+$VERSION = "2.10.13";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -284,9 +284,6 @@ sub fedoras {
 		#maybe this is altruism
 		my $recipient = lc $params[1];
 		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
-			# if ($debug_mode){
-			# 	print "$top is trying to buy out one of $recipient"."'s fedoras.";
-			# }
 		#but it probably isn't
 		} else { 
 			$recipient = $top;
@@ -343,6 +340,7 @@ sub fedoras {
 		}
 		$hats{lc $top}{'hats'} -= $price;
 		$hats{lc $top}{'tx_ttl'} += $price;
+		$hats{lc $top}{'feds_given'} += 1;
 		$hats{lc $bottom}{'fedoras'} += $params[-1];
 
 		$hats{'BANK'}{'hats'} += $price;
@@ -532,19 +530,30 @@ sub lottery {
 		}
 
 		#this isn't a real lottery or raffle, for any number of reasons
-		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions since last lottery
+		if ($hats{$p}{'tx_ttl'} > 50){ #they're eligible if they've done 50 hats worth of hat transactions since last lottery
 			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most) transactions
 
 			#fuck with odds/eligibility here
+			if ($hats{$p}{'hats'} > $pot){
+				next;
+			}
+
 			if ($p eq $leader->[0]){
 				next;
 			}
 			if ($hats{$p}{'fedoras'} > 100){
 				next;
-			} elsif (! exists $hats{$p}{'fedoras'} || $hats{$p}{'fedoras'} == 0){ #double their odds
-				push @contestants, $p;
+			} elsif (! exists $hats{$p}{'fedoras'} || $hats{$p}{'fedoras'} == 0){
+				$hats{$p}{'fedoras'} = 0; #initialize some junk just to make sure
+				if (! exists $hats{$p}{'feds_given'}){
+					$hats{$p}{'feds_given'} = 0;
+				}
+				if ($hats{$p}{'feds_given'}){ 
+					$hats{$p}{'feds_given'} = 0;
+				} else {
+					push @contestants, $p; #double their odds if they haven't been fedoraing
+				}
 			}
-
 
 			if ($p ne 'BANK'){
 				push @contestants, $p;
