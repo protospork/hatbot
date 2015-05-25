@@ -25,6 +25,7 @@
 #-don't allow new nicks to gift hats (but it should be fine for them to receive hats?)
 #-they can only send one gift per 24h?
 #-they can't send gifts within 24 of getting charity?
+#-disallow gifting between users w/same host
 
 #HATSTATS:
 #dump raw transaction info into #hatmarket or generate a rawlog I can dump into /www or something, I don't know
@@ -34,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.9.5";
+$VERSION = "2.10.12";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -43,6 +44,7 @@ $VERSION = "2.9.5";
     license => 'MIT/X11'
 );
 Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
+Irssi::settings_add_str('hatbot', 'hat_flood_chan', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
 Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
@@ -58,11 +60,14 @@ if (! $hats{'BANK'}{'lotto_last'}){
 my $debug_mode = Irssi::settings_get_bool('hat_debug_mode');
 my $hat_creation = Irssi::settings_get_bool('hat_fiat_hats');
 my $already_poor = 0;
+my $srv; #making this global so I can pass it to log_chan
 
 sub event_privmsg {
 	my ($server, $data, $nick, $mask) = @_;
 	my ($target, $text) = split(/ :/, $data, 2);
 	my $return;
+
+	$srv = $server;
 
 	my @enabled_chans = split /,/, Irssi::settings_get_str('hat_channels');
 	my $hat_lords = Irssi::settings_get_str('hat_lords');
@@ -104,6 +109,7 @@ sub event_privmsg {
 		if ($hat_lords =~ /$pretender/i){
 			($return, $target) = lottery($target);
 		} else {
+			($return, $target) = enter_lotto($target);
 			return;
 		}
 	} elsif ($hats{'BANK'}{'hats'} == 0){
@@ -115,6 +121,7 @@ sub event_privmsg {
 	#if it got this far it probably is a trigger
 	$hats{lc $nick}{'last_trigger'} = time;
 	$hats{lc $nick}{'last_chan'} = $target;
+	$hats{'hatbot'}{'last_chan'} = $target;
 
 	$return = pluralize($return);
 	if ($return && $return ne 'STOP'){
@@ -187,7 +194,7 @@ sub give_hats {
 			}
 
 			my $no;
-			if ($hats == 0){
+			if ($hats <= 0){
 				if (! $safe){
 				#punish them for their impatience
 					$no = ('thinks '.$_[0].' should be content with '.$hats{$them}{'hats'}.' hats.');
@@ -263,16 +270,14 @@ sub fedoras {
 	my ($top, $bottom) = @_;
 
 	$bottom =~ s/^.+?dora\s*//i;
+	return 'STOP' if length $bottom < 2; #fuck
+
 	my @params = split /\s+/, $bottom;
 
-	if ($params[-1] =~ /\D/){ #do a string operation to make sure it is a number
+	if ($params[-1] =~ /\D|^0$/){ #do a string operation to make sure it is a number
 		push @params, 1;
 	} else { #doing that regex might have turned it into a string? ┐(°o ° )┌
-		$params[-1] += 0;
-	}
-
-	if ($debug_mode){
-		print $_ for @params;
+		$params[$#params] += 0;
 	}
 
 	if (lc $params[0] eq 'buyout'){
@@ -317,6 +322,7 @@ sub fedoras {
 		} else {
 			$out .= $recipient.' is out of fedoras. Hatbot apologizes.';
 		}
+		$already_poor = 0;
 		return $out;
 	} else {
 		$bottom = lc $params[0];
@@ -348,6 +354,7 @@ sub fedoras {
 			$return =~ s/places a fedora/stacks $params[-1] fedoras/;
 		}
 
+		$already_poor = 0;
 		return $return;
 	}
 }
@@ -390,6 +397,9 @@ sub score {
 sub pluralize { #always refer to "hats", never "hat"
 	my $string = $_[0];
 	$string =~ s/\b1 ([Hh])ats/1 $1at/gi;
+
+	#also we're doing comma grouping here, why not
+	$string =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $string =~ /\b\d{4}/;
 
 	return $string;
 }
@@ -434,7 +444,7 @@ sub gamble {
 		$custom++;
 	} elsif ($text =~ /mod(\d\d*)/i){
 		if ($1 && $1 != 0){
-			$bet = int($hats{lc $nick}{'hats'} % $1);
+			$bet = int($hats{lc $nick}{'hats'} % $1) || $1;
 			$custom++;
 		} else {
 			return "cannot read this shit.";
@@ -454,14 +464,35 @@ sub gamble {
 		return "will not give you something for nothing.";
 	}
 
-	# adjust odds based on person's fedoras
+	# adjust odds
 	my $odds = 100;
+	my $bot_odds = 100;
+	my $mods = 0;
 	my $win; 
-	if (exists $hats{lc $nick}{'fedoras'}){
+	if (exists $hats{lc $nick}{'fedoras'}){ #punish them for fedora ownership
 		$odds -= $hats{lc $nick}{'fedoras'};
 	}
-	$win = int rand $odds;
-	if ($win >= 50){
+	if ($hats{lc $nick}{'hats'} / $bet > 10){ #punish them for betting safely
+		$mods -= 5;
+	} elsif ($hats{lc $nick}{'hats'} / $bet <= 2){ #also the reverse
+		$mods += 10;
+	}
+	if ($hats{lc $nick}{'hats'} > $hats{'BANK'}{'hats'}){ #punish them for being rich
+		$mods -= 5;
+	} else {
+		$mods += 10;
+	}
+
+	if (exists $hats{'hatbot'}{'fedoras'}){ #I'm hardcoding the bot's nick, shoot me
+		$bot_odds -= $hats{'hatbot'}{'fedoras'} / 10; #also I'm using hatbot where everything else uses BANK
+	}
+
+	my @res = (rand $odds, $odds, $mods, $bot_odds, rand $bot_odds);
+	if ($debug_mode){
+		print "$nick bet: ".(join ', ', @res);
+	}
+
+	if (($res[0] + $mods) > $res[-1]){
 		$win = 1;
 	} else {
 		$win = 0;
@@ -482,6 +513,7 @@ sub gamble {
 		$hats{'BANK'}{'hats'} += $bet;
 
 		tied(%hats)->save;
+		$already_poor = 0;
 
 		$return = 'lowers '.$nick.'\'s balance to '.$hats{lc $nick}{'hats'}.' hats. Hatbot now holds '.$hats{'BANK'}{'hats'}.' hats.';
 	}
@@ -490,6 +522,7 @@ sub gamble {
 sub lottery {
 	my @contestants;
 	my $pot = 0;
+	my $leader = find_richest();
 
 	$hats{'BANK'}{'lotto_last'} = (gmtime)[2];
 
@@ -500,7 +533,18 @@ sub lottery {
 
 		#this isn't a real lottery or raffle, for any number of reasons
 		if ($hats{$p}{'tx_ttl'} > 50){ #they're elegible if they've done 50 hats worth of hat transactions since last lottery
-			$pot += $hats{$p}{'tx_ttl'} / 5; #pot is 20% of (most) transactions
+			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most) transactions
+
+			#fuck with odds/eligibility here
+			if ($p eq $leader->[0]){
+				next;
+			}
+			if ($hats{$p}{'fedoras'} > 100){
+				next;
+			} elsif (! exists $hats{$p}{'fedoras'} || $hats{$p}{'fedoras'} == 0){ #double their odds
+				push @contestants, $p;
+			}
+
 
 			if ($p ne 'BANK'){
 				push @contestants, $p;
@@ -510,16 +554,26 @@ sub lottery {
 	$pot = int $pot;
 
 	if ($debug_mode){
-		print "Jackpot is $pot hats. ".(scalar @contestants)." eligible players.";
+		print "Jackpot is $pot hats.";
+		print "Contestants: ".(join ", ", @contestants);
 	}
+	log_chan("Contestants: ".(join ", ", @contestants));
 
 	#TODO: consider making minimum $pot configurable
-	if ($pot < 100 || $#contestants < 1){ #I could let the single qualifying contestant win it, but...why
-		return 'STOP';
+	if ($pot < 10000 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
+		log_chan('Jackpot only '.$pot);
+		if ($hats{'BANK'}{'hats'} == 0){
+			my $o = bailout();
+			return $o;
+		} else { 
+			return 'STOP';
+		}
 	}
 
+	my $max_pot = $leader->[1]; # equal to the worth of the #1 player
+	if ($max_pot < $pot){ $pot = $max_pot; }
+	
 	#now pick a winner
-	#TODO: make fedoras drop chances
 	#bug(?): all nicks are lowercased because they're just the hash keys
 	my $w = $contestants[int rand @contestants];
 
@@ -527,7 +581,7 @@ sub lottery {
 	my $bonus = 0;
 	if ($pot < ($hats{'BANK'}{'hats'} / 24)){ #4% is probably safe, right?
 		$bonus = int($hats{'BANK'}{'hats'} / 24);
-		$bonus %= (8 * $pot); #I have no rational basis for this number
+		# $bonus %= (8 * $pot); #I have no rational basis for this number
 	}
 
 	if (! $hat_creation){ #oh wait are there even hats
@@ -535,17 +589,27 @@ sub lottery {
 		$pot = 0;
 	}
 
-	$hats{$w}{'hats'} += $pot;
-	$hats{$w}{'hats'} += $bonus;
-	$hats{'BANK'}{'hats'} -= $bonus;
+	if ($hats{"BANK"}{'hats'} > 0){
+		$hats{$w}{'hats'} += $pot;
+		$hats{$w}{'hats'} += $bonus;
+		$hats{'BANK'}{'hats'} -= $bonus;
 
-	if ($debug_mode){
-		print "Winner is $w";
-		print "hatbot contributed $bonus hats.";
-	}
+		if ($debug_mode){
+			print "Winner is $w";
+			print "hatbot contributed $bonus hats.";
+		}
 
-	for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
-		$hats{$p}{'tx_ttl'} = 0;
+		for my $p (@contestants){ #wiping only @contestants allows slower people to maybe qualify next time
+			$hats{$p}{'tx_ttl'} = 0;
+		}
+		$hats{$leader->[0]}{'tx_ttl'} = 0; #also wipe the leader, removed from the array earlier
+	} else { #hatbot you motherfucker
+		$hats{'BANK'}{'hats'} += $pot;
+		if ($debug_mode){
+			print "hatbot took $pot hats";
+		}
+		$w = 'hatbot';
+		$already_poor = 0;
 	}
 	
 	tied(%hats)->save;
@@ -557,7 +621,38 @@ sub lottery {
 		$there = $hats{$w}{'last_chan'};
 	}
 
+	log_chan("$w wins ".($pot + $bonus)." hats ($pot + $bonus)");
 	return ("writes a giant foam check for ".($pot + $bonus)." hats and gives it to $w", $there);
+}
+sub enter_lotto {
+	my $tgt = lc $_[0];
+
+	if (! exists $hats{$tgt}{'hats'}){
+		$hats{$tgt}{'hats'} = 0;
+		return 'STOP';
+	}
+	if ($hats{$tgt}{'hats'} < 50){
+		return 'STOP';
+	}
+
+	$hats{$tgt}{'hats'} -= 50;
+	$hats{$tgt}{'tx_ttl'} += 50;
+	$hats{'BANK'}{'hats'} += 50;
+
+	tied(%hats)->save;
+
+	return "enters $tgt into the next lottery.";
+}
+sub find_richest {
+	my $richest = [0, 0];
+	for (keys %hats){
+		no warnings; #these warnings are impossible so just ignore them
+		if ($hats{$_}{'hats'} > $richest->[1] && $_ ne 'BANK'){
+			$richest = [$_, $hats{$_}{'hats'}];
+		}
+		use warnings;
+	}
+	return $richest;
 }
 sub fuzz { #why is there no cpan module for fuzzing lengths of time? only absolute times
 	my $then = $_[0];
@@ -637,7 +732,27 @@ sub go_bankrupt {
 	$hats{'BANK'}{'hats'} += $payout;
 	tied(%hats)->save;
 
+	log_chan('fedoras sold for '.$payout);
+
 	return 'sells all the fedoras and reincorporates under a different name.';
+}
+sub bailout {
+	my $mark = find_richest();
+
+	$hats{'BANK'}{'hats'} = $mark->[1];
+	$hats{$mark->[0]}{'hats'} = 0;
+
+	$already_poor = 0;
+
+	log_chan('taking '.$mark->[1].' hats from '.$mark->[0]);
+	return 'graciously accepts '.$mark->[0].'\'s gift of '.$mark->[1].' hats.';
+}
+sub log_chan {
+	my $place = Irssi::settings_get_str('hat_flood_chan');
+
+	my $msg = $_[0];
+	$msg =~ s/(?<=[^[:alpha:]]\d)(\d\d\d)\b/,$1/g while $msg =~ /\b\d{4}/; #comma pad numbers
+	$srv->command("msg $place $msg");
 }
 
 Irssi::signal_add("event privmsg", "event_privmsg");
