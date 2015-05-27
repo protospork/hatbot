@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.13";
+$VERSION = "2.10.16";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -333,7 +333,7 @@ sub fedoras {
 		}
 		$params[-1] = 0 + $params[-1]; #just to be sure
 
-		my $price = Irssi::settings_get_int('hat_fedora_price');
+		my $price = fedora_buyout_price($top);
 		$price *= $params[-1];
 		if ($hats{lc $top}{'hats'} < $price){
 			return "demands at least $price hats for this service.";
@@ -535,6 +535,7 @@ sub lottery {
 
 			#fuck with odds/eligibility here
 			if ($hats{$p}{'hats'} > $pot){
+				print $p." is too rich." if $debug_mode; #too spammy to send to the server
 				next;
 			}
 
@@ -571,12 +572,7 @@ sub lottery {
 	#TODO: consider making minimum $pot configurable
 	if ($pot < 10000 || $#contestants < 2){ #I could let the single qualifying contestant win it, but...why
 		log_chan('Jackpot only '.$pot);
-		if ($hats{'BANK'}{'hats'} == 0){
-			my $o = bailout();
-			return $o;
-		} else { 
-			return 'STOP';
-		}
+		return 'STOP' unless $hats{'BANK'}{'hats'} == 0;
 	}
 
 	my $max_pot = $leader->[1]; # equal to the worth of the #1 player
@@ -612,6 +608,9 @@ sub lottery {
 			$hats{$p}{'tx_ttl'} = 0;
 		}
 		$hats{$leader->[0]}{'tx_ttl'} = 0; #also wipe the leader, removed from the array earlier
+	} elsif ($leader->[1] > $pot){ #if hatbot's gonna steal he should go for the better target
+		my $o = bailout();
+		return ($o, $_[0]);
 	} else { #hatbot you motherfucker
 		$hats{'BANK'}{'hats'} += $pot;
 		if ($debug_mode){
