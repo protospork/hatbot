@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.16";
+$VERSION = "2.10.19";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -114,6 +114,8 @@ sub event_privmsg {
 		}
 	} elsif ($hats{'BANK'}{'hats'} == 0){
 		$return = go_bankrupt();
+	} elsif ($hats{'hatbot'}{'fedoras'} >= 90_000){ #100,000 fedoras is 0% win
+		($return, $target) = regift_fedoras($target);
 	} else {
 		return;
 	}
@@ -238,11 +240,10 @@ sub give_hats {
 		}
 	}
 	if ($hat_creation){
-		if ($hats > $hats{'BANK'}{'hats'}){
+		if ($hats > $hats{'BANK'}{'hats'} && $hats{'BANK'}{'hats'} > 0){
 			$hats = $hats{'BANK'}{'hats'};
 			$new_hats = $past_hats + $hats{'BANK'}{'hats'};
-		}
-		if ($hats{'BANK'}{'hats'} <= 0){
+		} else {
 			return 'is ruined.';
 		}
 	}
@@ -482,7 +483,7 @@ sub gamble {
 	}
 
 	if (exists $hats{'hatbot'}{'fedoras'}){ #I'm hardcoding the bot's nick, shoot me
-		$bot_odds -= $hats{'hatbot'}{'fedoras'} / 10; #also I'm using hatbot where everything else uses BANK
+		$bot_odds -= $hats{'hatbot'}{'fedoras'} / 1000; #also I'm using hatbot where everything else uses BANK
 	}
 
 	my @res = (rand $odds, $odds, $mods, $bot_odds, rand $bot_odds);
@@ -650,6 +651,36 @@ sub enter_lotto {
 	tied(%hats)->save;
 
 	return "enters $tgt into the next lottery.";
+}
+sub regift_fedoras {
+	my $tgt = $_[0];
+
+	my @pool;
+	for (keys %hats){
+		if (/^\d/){ #nicks can't start with numbers
+			#don't enable this and then leave on vacation, idiot
+			# delete $hats{$_};
+			next;
+		} elsif ($hats{$_}{'hats'} == 0){
+			next;
+		} else {
+			push @pool, $_;
+		}
+	}
+	my $victim = $pool[rand @pool];
+
+	my $ttl = $hats{'hatbot'}{'fedoras'};
+	$hats{$victim}{'fedoras'} += $ttl;
+	$hats{'hatbot'}{'fedoras'} = 0;
+
+	tied(%hats)->save;
+
+	log_chan("dumping $ttl fedoras on $victim");
+	if (exists $hats{$victim}{'last_chan'}){
+		$tgt = $hats{$victim}{'last_chan'};
+	}
+
+	return ("thinks you could make better use of these $ttl fedoras, $victim", $tgt);
 }
 sub find_richest {
 	my $richest = [0, 0];
