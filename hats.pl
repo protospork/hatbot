@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.10.19";
+$VERSION = "2.11.2";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -240,12 +240,15 @@ sub give_hats {
 		}
 	}
 	if ($hat_creation){
-		if ($hats > $hats{'BANK'}{'hats'} && $hats{'BANK'}{'hats'} > 0){
+		if ($hats >= $hats{'BANK'}{'hats'} && $hats{'BANK'}{'hats'} > 0){
 			$hats = $hats{'BANK'}{'hats'};
 			$new_hats = $past_hats + $hats{'BANK'}{'hats'};
-		} else {
-			return 'is ruined.';
+		} elsif ($hats{'BANK'}{'hats'} <= 0) {
+			return 'is ruined';
 		}
+		# if ($hats{'BANK'}{'hats'} <= 0){
+		# 	return 'is ruined.';
+		# }
 	}
 
 	$hats{$them}{'last_time'} = time;
@@ -270,87 +273,100 @@ sub hat_check {
 sub fedoras {
 	my ($top, $bottom) = @_;
 
+	$top = lc $top;
 	$bottom =~ s/^.+?dora\s*//i;
 	return 'STOP' if length $bottom < 2; #fuck
 
 	my @params = split /\s+/, $bottom;
 
-	if ($params[-1] =~ /\D|^0$/){ #do a string operation to make sure it is a number
-		push @params, 1;
-	} else { #doing that regex might have turned it into a string? ┐(°o ° )┌
-		$params[$#params] += 0;
+	my ($action, $quant, $target) = ('no', 1, $top);
+	for (@params){
+		if ($_ =~ /buyout/i){
+			$action = 'buyout';
+		} elsif ($_ =~ /^[\d,_]+$/){
+			$quant = $_;
+			$quant =~ s/\D+//g; #strip commas
+		} else {
+			$target = lc $_;
+		}
 	}
 
-	if (lc $params[0] eq 'buyout'){
+	# if ($params[-1] =~ /\D|^0$/){ #do a string operation to make sure it is a number
+	# 	push @params, 1;
+	# } else { #doing that regex might have turned it into a string? ┐(°o ° )┌
+	# 	$params[$#params] += 0;
+	# }
+
+	if ($action eq 'buyout'){
 		#maybe this is altruism
-		my $recipient = lc $params[1];
+		my $recipient = $target;
 		if ($recipient ne 'buyout' && exists $hats{$recipient}{'fedoras'}){
 		#but it probably isn't
 		} else { 
 			$recipient = $top;
 		}
 
-		if ($params[-1] > $hats{$recipient}{'fedoras'}){
-			$params[-1] = $hats{$recipient}{'fedoras'};
+		if ($quant > $hats{$recipient}{'fedoras'}){
+			$quant = $hats{$recipient}{'fedoras'};
 		}
 
 		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
-		$charge *= $params[-1];
+		$charge *= $quant;
 
-		if ($hats{lc $recipient}{'fedoras'} == 0){
+		if ($hats{$recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
-		} elsif ($hats{lc $top}{'hats'} < $charge){
+		} elsif ($hats{$top}{'hats'} < $charge){
 			return "knows you don't have $charge hats.";
 		}		
 
-		$hats{lc $top}{'hats'} -= $charge;
-		$hats{lc $top}{'tx_ttl'} += $charge;
-		$hats{lc $recipient}{'fedoras'} -= $params[-1];
+		$hats{$top}{'hats'} -= $charge;
+		$hats{$top}{'tx_ttl'} += $charge;
+		$hats{$recipient}{'fedoras'} -= $quant;
 		$hats{'BANK'}{'hats'} += $charge;
 
 		tied(%hats)->save;
 
 		my $out = 'misplaces a fedora while accepting '.$top.'\'s gift of '.$charge.' hats. ';
-		if ($params[-1] > 1){
-			$out =~ s/a fedora/$params[-1] fedoras/;
+		if ($quant > 1){
+			$out =~ s/a fedora/$quant fedoras/;
 		}
 
-		if ($hats{lc $recipient}{'fedoras'} > 0){
-			$out .= $recipient.' will have to make do with '.$hats{lc $recipient}{'fedoras'}.' fedoras.';
+		if ($hats{$recipient}{'fedoras'} > 0){
+			$out .= $recipient.' will have to make do with '.$hats{$recipient}{'fedoras'}.' fedoras.';
 		} else {
 			$out .= $recipient.' is out of fedoras. Hatbot apologizes.';
 		}
 		$already_poor = 0;
 		return $out;
 	} else {
-		$bottom = lc $params[0];
-		if (! exists $hats{lc $bottom}){ #there are many saner ways to validate a nick <_<
+		$bottom = $target;
+		if (! exists $hats{$bottom}){ #there are many saner ways to validate a nick <_<
 			return "does not think $bottom is a person.";
 		} elsif (! $bottom || $bottom eq '') {
 			return "needs a target.";
 		}
-		if (! exists $params[1]){
-			push @params, 1;
+		if (! $quant){
+			$quant = 1;
 		}
-		$params[-1] = 0 + $params[-1]; #just to be sure
+		$quant = 0 + $quant; #just to be sure
 
 		my $price = fedora_buyout_price($top);
-		$price *= $params[-1];
-		if ($hats{lc $top}{'hats'} < $price){
+		$price *= $quant;
+		if ($hats{$top}{'hats'} < $price){
 			return "demands at least $price hats for this service.";
 		}
-		$hats{lc $top}{'hats'} -= $price;
-		$hats{lc $top}{'tx_ttl'} += $price;
-		$hats{lc $top}{'feds_given'} += 1;
-		$hats{lc $bottom}{'fedoras'} += $params[-1];
+		$hats{$top}{'hats'} -= $price;
+		$hats{$top}{'tx_ttl'} += $price;
+		$hats{$top}{'feds_given'} += 1;
+		$hats{$bottom}{'fedoras'} += $quant;
 
 		$hats{'BANK'}{'hats'} += $price;
 
 		tied(%hats)->save;
 
 		my $return = 'takes '.$price.' of '.$top.'\'s hats and places a fedora on '.$bottom.'\'s head';
-		if ($params[-1] > 1){
-			$return =~ s/places a fedora/stacks $params[-1] fedoras/;
+		if ($quant > 1){
+			$return =~ s/places a fedora/stacks $quant fedoras/;
 		}
 
 		$already_poor = 0;
