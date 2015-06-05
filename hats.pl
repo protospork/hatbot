@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.11.2";
+$VERSION = "2.11.4";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -47,7 +47,7 @@ Irssi::settings_add_str('hatbot', 'hat_channels', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_flood_chan', '#wat');
 Irssi::settings_add_str('hatbot', 'hat_lords', "");
 Irssi::settings_add_int('hatbot', 'hat_timeout', 86400);
-Irssi::settings_add_int('hatbot', 'hat_fedora_price', 50);
+Irssi::settings_add_int('hatbot', 'hat_fedora_price', 100);
 Irssi::settings_add_int('hatbot', 'hat_bet_timeout', 3);
 Irssi::settings_add_bool('hatbot', 'hat_debug_mode', 1);
 Irssi::settings_add_bool('hatbot', 'hat_fiat_hats', 1);
@@ -310,8 +310,12 @@ sub fedoras {
 			$quant = $hats{$recipient}{'fedoras'};
 		}
 
-		my $charge = fedora_buyout_price($recipient); #could set it to $top's price if you want to be meaner
+		my $charge = fedora_price($recipient); #could set it to $top's price if you want to be meaner
 		$charge *= $quant;
+		$charge *= 0.95; #let's make buyouts cheaper and see what happens
+		if ($recipient ne $top){
+			$charge *= 0.95; #let's make proxy buyouts even cheaper
+		}
 
 		if ($hats{$recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
@@ -350,7 +354,7 @@ sub fedoras {
 		}
 		$quant = 0 + $quant; #just to be sure
 
-		my $price = fedora_buyout_price($top);
+		my $price = fedora_price($top);
 		$price *= $quant;
 		if ($hats{$top}{'hats'} < $price){
 			return "demands at least $price hats for this service.";
@@ -373,10 +377,20 @@ sub fedoras {
 		return $return;
 	}
 }
-sub fedora_buyout_price {
+sub fedora_price {
 	my $person = $_[0];
 	my $price = Irssi::settings_get_int('hat_fedora_price');
-	$price += ($price - (score($person))[1]);
+	# $price += ($price - (score($person))[1]);
+
+	#new pricing scheme: reliant on your worth compared to player #1's worth
+	my $leader = find_richest();
+	$leader = $leader->[1];
+
+	my $fraction = $hats{$person}{'hats'} / $leader;
+	if ($fraction > 1){ $fraction = 1 / $fraction; } #┐('～`；)┌ 
+
+	$price += ($price * $fraction);
+
 	return int($price);
 }
 sub reset_times {
@@ -775,7 +789,9 @@ sub go_bankrupt {
 	}
 	my $payout = 0;
 	for my $v (keys %hats){
-		$payout += drain_fedoras($v, 'max', Irssi::settings_get_int('hat_fedora_price'));
+		#hatbot's only getting wholesale rates for these fedoras
+		#this is the only way to remove hats from the economy right now
+		$payout += drain_fedoras($v, 'max', 50);
 	}
 
 	if ($payout == 0){
