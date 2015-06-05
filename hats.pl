@@ -513,7 +513,7 @@ sub gamble {
 	}
 
 	if (exists $hats{'hatbot'}{'fedoras'}){ #I'm hardcoding the bot's nick, shoot me
-		$bot_odds -= $hats{'hatbot'}{'fedoras'} / 1000; #also I'm using hatbot where everything else uses BANK
+		$bot_odds -= $hats{'hatbot'}{'fedoras'} / 100_000; #also I'm using hatbot where everything else uses BANK
 	}
 
 	my @res = (rand $odds, $odds, $mods, $bot_odds, rand $bot_odds);
@@ -573,7 +573,7 @@ sub lottery {
 			if ($p eq $leader->[0]){
 				next;
 			}
-			if ($hats{$p}{'fedoras'} > 100){
+			if ($hats{$p}{'fedoras'} > 1000){
 				next;
 			} elsif (! exists $hats{$p}{'fedoras'} || $hats{$p}{'fedoras'} == 0){
 				$hats{$p}{'fedoras'} = 0; #initialize some junk just to make sure
