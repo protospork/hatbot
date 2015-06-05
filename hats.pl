@@ -35,7 +35,7 @@ use vars qw($VERSION %IRSSI);
 use Modern::Perl;
 use Tie::YAML;
 
-$VERSION = "2.11.4";
+$VERSION = "2.11.6";
 %IRSSI = (
     authors => 'protospork',
     contact => 'https://github.com/protospork',
@@ -316,6 +316,7 @@ sub fedoras {
 		if ($recipient ne $top){
 			$charge *= 0.95; #let's make proxy buyouts even cheaper
 		}
+		$charge = int($charge);
 
 		if ($hats{$recipient}{'fedoras'} == 0){
 			return "cannot solve your problems.";
