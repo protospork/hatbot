@@ -562,7 +562,7 @@ sub lottery {
 
 		#this isn't a real lottery or raffle, for any number of reasons
 		if ($hats{$p}{'tx_ttl'} > 50){ #they're eligible if they've done 50 hats worth of hat transactions since last lottery
-			$pot += $hats{$p}{'tx_ttl'} / 10; #pot is 10% of (most) transactions
+			$pot += $hats{$p}{'tx_ttl'} / 12; #pot is 8% of (most) transactions
 
 			#fuck with odds/eligibility here
 			if ($hats{$p}{'hats'} > $pot){
@@ -580,11 +580,11 @@ sub lottery {
 				if (! exists $hats{$p}{'feds_given'}){
 					$hats{$p}{'feds_given'} = 0;
 				}
-				if ($hats{$p}{'feds_given'}){ 
-					$hats{$p}{'feds_given'} = 0;
-				} else {
+				# if ($hats{$p}{'feds_given'}){ 
+					# $hats{$p}{'feds_given'} = 0;
+				# } else {
 					push @contestants, $p; #double their odds if they haven't been fedoraing
-				}
+				# }
 			}
 
 			if ($p ne 'BANK'){
@@ -688,8 +688,7 @@ sub regift_fedoras {
 	my @pool;
 	for (keys %hats){
 		if (/^\d/){ #nicks can't start with numbers
-			#don't enable this and then leave on vacation, idiot
-			# delete $hats{$_};
+			delete $hats{$_};
 			next;
 		} elsif ($hats{$_}{'hats'} == 0){
 			next;
